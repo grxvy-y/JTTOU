@@ -1,30 +1,31 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database.db import engine 
+from database.db import init_db
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Server Startup ---
     try:
-        # Attempt to open a quick connection to Postgres
-        with engine.connect() as connection:
-            print("[SUCCESS] Database connection successful!")
+        init_db()
+        print("[SUCCESS] Database connection successful and tables initialized!")
     except Exception as e:
         print("[ERROR] Database connection failed!")
         print(e)
-        
+
     yield  # The server runs here...
-    
+
     # --- Server Shutdown ---
     print("[SHUTDOWN] Server shutting down...")
 
-# Pass the lifespan handler to your FastAPI app
-app = FastAPI(title="Pooks API", lifespan=lifespan)
 
-# Restore CORS middleware to allow communication from the React frontend
+# FastAPI app instance
+app = FastAPI(title="Pookie Calendar API", lifespan=lifespan)
+
+# CORS — allows the React frontend (port 5173) to talk to this backend (port 8000)
 origins = [
-    "http://localhost:5173",  # React Vite local development server
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
@@ -36,11 +37,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Pooks API backend!"}
+    return {"message": "Welcome to the Pookie Calendar API!"}
+
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
-

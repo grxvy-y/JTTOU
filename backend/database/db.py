@@ -13,6 +13,7 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 # Automatically create tables in Postgres
 def init_db():
+    from database import models
     SQLModel.metadata.create_all(engine)
 
 # Function to safely borrow a database connection for requests
