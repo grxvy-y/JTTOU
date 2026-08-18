@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 
 
-# Represents one day on the work roster — either a shift or a day off
+# Represents one day on the work schedule — either a shift or a day off
 class Shift(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     shift_date: DateType = Field(index=True)             # The calendar date (e.g. 2026-08-20)
