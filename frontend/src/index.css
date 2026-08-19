@@ -1,1 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=ADLaM+Display&display=swap');
 @import "tailwindcss";
+
+:root {
+  --color-text:       #393D3B;
+  --color-bg:         #e9b9ca;
+  --color-primary:    #FEFAFF;
+  --color-secondary:  #FAF1E8;
+  --color-accent:     #2f2b40;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'ADLaM Display', cursive;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
