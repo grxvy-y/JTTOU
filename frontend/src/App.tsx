@@ -1,4 +1,5 @@
 import Navbar from './components/Navbar'
+import FileDropZone from './components/FileDropZone'
 
 function App() {
   return (
@@ -36,7 +37,7 @@ function App() {
 
       <Navbar />
 
-      {/* ── Main placeholder content ── */}
+      {/* ── Hero section ── */}
       <main
         id="home"
         style={{
@@ -45,27 +46,65 @@ function App() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '16px',
-          paddingTop: '80px',
+          gap: '32px',
+          paddingTop: '96px',
+          paddingBottom: '60px',
           paddingInline: '24px',
           position: 'relative',
           zIndex: 1,
           textAlign: 'center',
         }}
       >
-        <p style={{ fontSize: '0.75rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--color-accent)', opacity: 0.6 }}>
-          Shell · Work in Progress
-        </p>
-        <h1 style={{ fontSize: 'clamp(3rem, 8vw, 6rem)', fontWeight: 400, color: 'var(--color-accent)', margin: 0 }}>
-          JTTOU
-        </h1>
-        <p style={{ fontSize: '1.1rem', color: 'var(--color-text)', maxWidth: '420px', lineHeight: 1.6, opacity: 0.75 }}>
-          Frontend shell is up. Start building your pages here.
-        </p>
+        {/* Hero copy */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+          <p style={{
+            fontSize: '0.72rem', letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: 'var(--color-accent)', opacity: 0.55, margin: 0,
+          }}>
+            Roster Upload
+          </p>
+          <h1 style={{
+            fontSize: 'clamp(2rem, 5vw, 3.2rem)',
+            fontWeight: 400,
+            color: 'var(--color-accent)',
+            margin: 0,
+            lineHeight: 1.15,
+          }}>
+            Upload your schedule
+          </h1>
+          <p style={{
+            fontSize: '1rem',
+            color: 'var(--color-text)',
+            maxWidth: '420px',
+            lineHeight: 1.65,
+            opacity: 0.7,
+            margin: 0,
+          }}>
+            Drop your roster screenshots or files below — the AI will read them and extract your shifts automatically.
+          </p>
+        </div>
+
+        {/* Drop zone */}
+        <FileDropZone />
       </main>
 
-      {/* Footer anchor */}
-      <div id="calendar" />
+      {/* ── Calendar section placeholder ── */}
+      <section id="calendar" style={{
+        minHeight: '60vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        zIndex: 1,
+        borderTop: '1px solid rgba(47,43,64,0.08)',
+      }}>
+        <p style={{ opacity: 0.3, fontSize: '0.9rem', fontFamily: "'ADLaM Display', cursive" }}>
+          Calendar coming soon
+        </p>
+      </section>
+
+      {/* Footer */}
       <footer
         id="footer"
         style={{
