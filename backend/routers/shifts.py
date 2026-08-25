@@ -9,7 +9,8 @@ from database.models import Shift
 router = APIRouter(prefix="/shifts", tags=["shifts"])
 
 # Folder where uploaded roster screenshots will be saved temporarily
-UPLOAD_DIR = "uploads"
+# /tmp is the only writable directory on Vercel serverless — "uploads/" would crash with EROFS
+UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
