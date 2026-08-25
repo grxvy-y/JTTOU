@@ -59,8 +59,8 @@ function App() {
     <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden font-sans selection:bg-indigo-500 selection:text-white">
       
       {/* Background Decorative Glow Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[6000ms]"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[8000ms]"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse [animation-duration:6000ms]"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse [animation-duration:8000ms]"></div>
       <div className="absolute top-[30%] right-[20%] w-[30vw] h-[30vw] bg-violet-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
       {/* Header */}
