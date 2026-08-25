@@ -1,17 +1,19 @@
 import Navbar from './components/Navbar'
 import FileDropZone from './components/FileDropZone'
+import Calendar from './components/Calendar'
 
 function App() {
   return (
     <div
       style={{
         position: 'relative',
-        minHeight: '100vh',
+        width: '100%',
+        overflowX: 'hidden',
+        overflowY: 'hidden',
         backgroundColor: 'var(--color-bg)',
         color: 'var(--color-text)',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
         fontFamily: "'ADLaM Display', cursive",
       }}
     >
@@ -37,32 +39,33 @@ function App() {
 
       <Navbar />
 
-      {/* ── Hero section ── */}
+      {/* Dropbox */}
       <main
         id="home"
         style={{
-          flex: 1,
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '32px',
-          paddingTop: '96px',
-          paddingBottom: '60px',
+          paddingTop: '80px',   /* offset for fixed navbar */
+          paddingBottom: '40px',
           paddingInline: '24px',
           position: 'relative',
           zIndex: 1,
           textAlign: 'center',
+          boxSizing: 'border-box',
         }}
       >
-        {/* Hero copy */}
+        {/* Dropbox heading */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
           <p style={{
             fontSize: '0.72rem', letterSpacing: '0.2em',
             textTransform: 'uppercase',
             color: 'var(--color-accent)', opacity: 0.55, margin: 0,
           }}>
-            Roster Upload
+            JTTOU
           </p>
           <h1 style={{
             fontSize: 'clamp(2rem, 5vw, 3.2rem)',
@@ -71,7 +74,7 @@ function App() {
             margin: 0,
             lineHeight: 1.15,
           }}>
-            Upload your schedule
+            Upload screenshot(s)
           </h1>
           <p style={{
             fontSize: '1rem',
@@ -81,27 +84,52 @@ function App() {
             opacity: 0.7,
             margin: 0,
           }}>
-            Drop your roster screenshots or files below — the AI will read them and extract your shifts automatically.
+            Drop your schedule screenshots/files here — the AI will read them and extract for pookie 🩷
           </p>
         </div>
 
-        {/* Drop zone */}
         <FileDropZone />
       </main>
 
-      {/* ── Calendar section placeholder ── */}
-      <section id="calendar" style={{
-        minHeight: '60vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        zIndex: 1,
-        borderTop: '1px solid rgba(47,43,64,0.08)',
-      }}>
-        <p style={{ opacity: 0.3, fontSize: '0.9rem', fontFamily: "'ADLaM Display', cursive" }}>
-          Calendar coming soon
-        </p>
+      {/* Calendar section */}
+      <section
+        id="calendar"
+        style={{
+          minHeight: '100vh',
+          position: 'relative',
+          zIndex: 1,
+          borderTop: '1px solid rgba(47,43,64,0.08)',
+          padding: '80px 24px 40px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Section heading */}
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{
+            fontSize: '0.72rem', letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: 'var(--color-accent)', opacity: 0.55, margin: 0,
+            fontFamily: "'ADLaM Display', cursive",
+          }}>
+            Schedule
+          </p>
+          <h2 style={{
+            fontSize: 'clamp(1.6rem, 4vw, 2.4rem)',
+            fontWeight: 400,
+            color: 'var(--color-accent)',
+            margin: 0,
+            fontFamily: "'ADLaM Display', cursive",
+          }}>
+            Calendar
+          </h2>
+        </div>
+
+        <Calendar />
       </section>
 
       {/* Footer */}

@@ -13,11 +13,25 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
-  height: 100%;
+html, body {
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
   font-family: 'ADLaM Display', cursive;
   background-color: var(--color-bg);
   color: var(--color-text);
+}
+
+#root {
+  width: 100%;
+}
+
+/* ── Hide scrollbars (keep scroll functionality) ── */
+html {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge legacy */
+}
+
+html::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
 }
