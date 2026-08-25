@@ -7,9 +7,15 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is not set. "
+        "Add it to your Vercel project settings (Settings → Environment Variables)."
+    )
+
 # Create the engine to talk to PostgreSQL
 # echo=True prints all SQL queries to the terminal (great for learning/debugging!)
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 
 # Automatically create tables in Postgres
 def init_db():
