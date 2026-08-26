@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -38,7 +38,6 @@ function isToday(year: number, month: number, day: number) {
 // ─── Inline style tokens ──────────────────────────────────────────────────────
 
 const accent  = 'var(--color-accent)'
-const bg      = 'var(--color-bg)'
 const primary = 'var(--color-primary)'
 const text    = 'var(--color-text)'
 const font    = "'ADLaM Display', cursive"
