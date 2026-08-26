@@ -31,6 +31,9 @@ app.include_router(shifts_router)
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://jttou.vercel.app",
+    # Allow all Vercel preview deployment URLs
+    "https://*.vercel.app",
 ]
 
 app.add_middleware(
