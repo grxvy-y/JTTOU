@@ -155,11 +155,12 @@ export default function FileDropZone() {
           Images, PDFs, text files — multiple allowed
         </p>
 
-        {/* Hidden file input */}
+        {/* Hidden file input — accept list opens photo gallery on mobile */}
         <input
           ref={inputRef}
           type="file"
           multiple
+          accept="image/*,application/pdf,.txt,.csv,.xls,.xlsx"
           style={{ display: 'none' }}
           onChange={onInputChange}
           aria-hidden="true"

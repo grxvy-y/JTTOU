@@ -4,23 +4,77 @@ import Calendar from './components/Calendar'
 
 function App() {
   return (
-    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden font-sans selection:bg-indigo-500 selection:text-white">
-      
-      {/* Background Decorative Glow Elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse [animation-duration:6000ms]"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-fuchsia-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse [animation-duration:8000ms]"></div>
-      <div className="absolute top-[30%] right-[20%] w-[30vw] h-[30vw] bg-violet-600/5 rounded-full blur-[100px] pointer-events-none"></div>
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        overflowX: 'hidden',
+        overflowY: 'hidden',
+        backgroundColor: 'var(--color-bg)',
+        color: 'var(--color-text)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: "'ADLaM Display', cursive",
+      }}
+    >
+      {/* Ambient background glows */}
+      <div style={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        top: '-15%', left: '-10%',
+        width: '55vw', height: '55vw',
+        borderRadius: '50%',
+        background: 'rgba(254, 250, 255, 0.25)',
+        filter: 'blur(120px)',
+      }} />
+      <div style={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        bottom: '-15%', right: '-10%',
+        width: '55vw', height: '55vw',
+        borderRadius: '50%',
+        background: 'rgba(250, 241, 232, 0.30)',
+        filter: 'blur(120px)',
+      }} />
 
-      {/* Header */}
       <Navbar />
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-6 py-12 flex-1 w-full flex flex-col gap-12 z-10">
-        
-        {/* Hero Section */}
-        <section className="text-center max-w-3xl mx-auto flex flex-col items-center gap-4">
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400 leading-tight">
-            Next-Gen Frontend Scaffold
+      {/* Dropbox */}
+      <main
+        id="home"
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '32px',
+          paddingTop: '80px',
+          paddingBottom: '40px',
+          paddingInline: '24px',
+          position: 'relative',
+          zIndex: 1,
+          textAlign: 'center',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Dropbox heading */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+          <p style={{
+            fontSize: '0.72rem', letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: 'var(--color-accent)', opacity: 0.55, margin: 0,
+          }}>
+            JTTOU
+          </p>
+          <h1 style={{
+            fontSize: 'clamp(2rem, 5vw, 3.2rem)',
+            fontWeight: 400,
+            color: 'var(--color-accent)',
+            margin: 0,
+            lineHeight: 1.15,
+          }}>
+            Upload screenshot(s)
           </h1>
           <p style={{
             fontSize: '1rem',
@@ -32,7 +86,7 @@ function App() {
           }}>
             Drop your schedule screenshots/files here — the AI will read them and extract for pookie 🩷
           </p>
-        </section>
+        </div>
 
         <FileDropZone />
       </main>
@@ -44,7 +98,7 @@ function App() {
           minHeight: '100vh',
           position: 'relative',
           zIndex: 1,
-          borderTop: '1px solid rgba(47,43,64,0.08)',
+
           padding: '80px 24px 40px',
           display: 'flex',
           flexDirection: 'column',
