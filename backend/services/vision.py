@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 import base64
 from datetime import date as DateType, time as TimeType, datetime
 from typing import Optional, Literal
@@ -75,7 +76,7 @@ def _clean_json_string(text: str) -> str:
     return text
 
 
-def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gemini-2.5-flash") -> RosterExtractionResult:
+def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gemini-3.6-flash") -> RosterExtractionResult:
     """Extract roster shifts using Google Gemini Vision API."""
     from google import genai
     from google.genai import types
@@ -83,36 +84,57 @@ def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model
     client = genai.Client(api_key=api_key)
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
-    # Attempt primary model, with fallback to gemini-1.5-flash if unavailable
-    candidate_models = [model_name, "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Use specified model, deduplicating candidate flash fallbacks
+    candidates = [model_name]
+    for m in ["gemini-flash-latest", "gemini-3.6-flash"]:
+        if m not in candidates:
+            candidates.append(m)
+
     last_err = None
 
-    for model in candidate_models:
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=[image_part, ROSTER_VISION_PROMPT],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1,
-                ),
-            )
-            raw_json = _clean_json_string(response.text)
-            parsed_data = json.loads(raw_json)
+    for model in candidates:
+        # Retry up to 3 times per model in case of temporary 503 spikes
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=[image_part, ROSTER_VISION_PROMPT],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1,
+                    ),
+                )
+                raw_json = _clean_json_string(response.text)
+                parsed_data = json.loads(raw_json)
 
-            shifts = [ShiftExtractionItem(**item) for item in parsed_data.get("shifts", [])]
-            return RosterExtractionResult(
-                provider_used="gemini",
-                model_used=model,
-                shifts=shifts,
-                notes=parsed_data.get("notes"),
-            )
-        except Exception as e:
-            last_err = e
-            # Try next model if it's a 404/not found or specific model availability issue
-            continue
+                if isinstance(parsed_data, list):
+                    raw_shifts = parsed_data
+                    notes = None
+                elif isinstance(parsed_data, dict):
+                    raw_shifts = parsed_data.get("shifts", [])
+                    notes = parsed_data.get("notes")
+                else:
+                    raw_shifts = []
+                    notes = None
 
-    raise RuntimeError(f"Gemini vision extraction failed with all candidate models: {last_err}")
+                shifts = [ShiftExtractionItem(**item) for item in raw_shifts]
+                return RosterExtractionResult(
+                    provider_used="gemini",
+                    model_used=model,
+                    shifts=shifts,
+                    notes=notes,
+                )
+            except Exception as e:
+                last_err = e
+                # Check for temporary 503 UNAVAILABLE spike
+                err_str = str(e)
+                if "503" in err_str or "UNAVAILABLE" in err_str:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                # For non-503 errors (like 404), move to next candidate model immediately
+                break
+
+    raise RuntimeError(f"Gemini vision extraction failed with candidate models {candidates}: {last_err}")
 
 
 def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gpt-4o") -> RosterExtractionResult:
@@ -145,12 +167,22 @@ def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model
     raw_json = _clean_json_string(content)
     parsed_data = json.loads(raw_json)
 
-    shifts = [ShiftExtractionItem(**item) for item in parsed_data.get("shifts", [])]
+    if isinstance(parsed_data, list):
+        raw_shifts = parsed_data
+        notes = None
+    elif isinstance(parsed_data, dict):
+        raw_shifts = parsed_data.get("shifts", [])
+        notes = parsed_data.get("notes")
+    else:
+        raw_shifts = []
+        notes = None
+
+    shifts = [ShiftExtractionItem(**item) for item in raw_shifts]
     return RosterExtractionResult(
         provider_used="openai",
         model_used=model_name,
         shifts=shifts,
-        notes=parsed_data.get("notes"),
+        notes=notes,
     )
 
 
@@ -197,7 +229,7 @@ def extract_shifts_from_image(
     if selected_provider == "gemini":
         if not gemini_key:
             raise ValueError("GEMINI_API_KEY is not set in backend/.env")
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
         return _extract_with_gemini(image_bytes, mime_type, gemini_key, gemini_model)
 
     elif selected_provider == "openai":
