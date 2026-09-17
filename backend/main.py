@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database.db import init_db
 from routers.shifts import router as shifts_router
+from routers.weather import router as weather_router
 
 
 @asynccontextmanager
@@ -26,6 +27,7 @@ app = FastAPI(title="Pookie Calendar API", lifespan=lifespan)
 
 # Include API routers
 app.include_router(shifts_router)
+app.include_router(weather_router)
 
 # CORS — allows the React frontend (port 5173) to talk to this backend (port 8000)
 origins = [
