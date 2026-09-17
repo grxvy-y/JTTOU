@@ -1,1 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=ADLaM+Display&display=swap');
 @import "tailwindcss";
+
+/* ── Design tokens ── */
+:root {
+  --color-text:       #393D3B;
+  --color-bg:         #e9b9ca;
+  --color-primary:    #FEFAFF;
+  --color-secondary:  #FAF1E8;
+  --color-accent:     #2f2b40;
+  color-scheme: light;          /* prevents OS dark-mode from hijacking colours */
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ── Base ── defined AFTER Tailwind so these win over Preflight */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: #e9b9ca !important;   /* hard-pin bg in case Tailwind Preflight overrides */
+  color: #393D3B !important;
+  font-family: 'ADLaM Display', cursive;
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+
+html::-webkit-scrollbar {
+  display: none;                  /* Chrome, Safari, Opera */
+}
+
+#root {
+  width: 100%;
+  background-color: #e9b9ca;
+  color: #393D3B;
+}
+
+/* ── Responsive: desktop — show links, hide hamburger ── */
+@media (min-width: 640px) {
+  .nav-desktop-links { display: flex !important; }
+  .nav-hamburger     { display: none  !important; }
+}
+
+/* ── Responsive: mobile — hide links, show hamburger ── */
+@media (max-width: 639px) {
+  .nav-desktop-links { display: none  !important; }
+  .nav-hamburger     { display: flex  !important; }
+}
+
+/* ── General mobile tweaks ── */
+@media (max-width: 639px) {
+  /* Prevent content from being too wide */
+  main, section {
+    padding-inline: 16px !important;
+  }
+
+  /* Make dropzone full-width on mobile */
+  section[style] > div {
+    max-width: 100% !important;
+  }
+
+  /* Calendar fits narrow screens */
+  section#calendar > section {
+    max-width: 100% !important;
+  }
+}
+
