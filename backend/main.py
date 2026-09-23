@@ -25,9 +25,11 @@ async def lifespan(app: FastAPI):
 # FastAPI app instance
 app = FastAPI(title="Pookie Calendar API", lifespan=lifespan)
 
-# Include API routers
+# Include API routers (supports both direct routes and /api prefixed routes for Vercel)
 app.include_router(shifts_router)
+app.include_router(shifts_router, prefix="/api")
 app.include_router(weather_router)
+app.include_router(weather_router, prefix="/api")
 
 # CORS — allows the React frontend (port 5173) to talk to this backend (port 8000)
 origins = [
@@ -48,10 +50,12 @@ app.add_middleware(
 
 
 @app.get("/")
+@app.get("/api")
 def read_root():
     return {"message": "Welcome to the Pookie Calendar API!"}
 
 
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
     return {"status": "healthy"}
