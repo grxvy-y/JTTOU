@@ -1,16 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import type {
+  WeatherData,
+  Shift,
+  DayOffWeather,
+} from '../services/api'
+import {
+  fetchCurrentWeather,
+  fetchWeatherForecast,
+  fetchDaysOffWeather,
+  fetchShifts,
+} from '../services/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const YEAR_RANGE_BEHIND = 5
-const YEAR_RANGE_AHEAD  = 10
+const YEAR_RANGE_AHEAD = 10
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,21 +41,26 @@ function buildYearList(current: number): number[] {
   return years
 }
 
-function isToday(year: number, month: number, day: number) {
-  const t = new Date()
-  return t.getFullYear() === year && t.getMonth() === month && t.getDate() === day
+function toDateKey(year: number, monthZeroIndexed: number, day: number): string {
+  const m = String(monthZeroIndexed + 1).padStart(2, '0')
+  const d = String(day).padStart(2, '0')
+  return `${year}-${m}-${d}`
 }
 
-// ─── Inline style tokens ──────────────────────────────────────────────────────
+function isSameDay(d1: Date, y: number, m: number, d: number) {
+  return d1.getFullYear() === y && d1.getMonth() === m && d1.getDate() === d
+}
 
-const accent  = 'var(--color-accent)'
+// ─── Inline Style Tokens ──────────────────────────────────────────────────────
+
+const accent = 'var(--color-accent)'
 const primary = 'var(--color-primary)'
-const text    = 'var(--color-text)'
-const font    = "'ADLaM Display', cursive"
+const text = 'var(--color-text)'
+const font = "'ADLaM Display', cursive"
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Sub-Components ───────────────────────────────────────────────────────────
 
-/** Small arrow button used for prev/next navigation */
+/** Arrow button used for prev/next month */
 function ArrowBtn({
   dir, onClick, disabled,
 }: { dir: 'left' | 'right'; onClick: () => void; disabled?: boolean }) {
@@ -57,17 +73,17 @@ function ArrowBtn({
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        width: '30px', height: '30px',
-        borderRadius: '8px',
-        border: `1px solid ${hov ? 'rgba(47,43,64,0.25)' : 'rgba(47,43,64,0.12)'}`,
-        background: hov ? 'rgba(47,43,64,0.08)' : 'rgba(254,250,255,0.45)',
+        width: '32px', height: '32px',
+        borderRadius: '10px',
+        border: `1px solid ${hov ? 'rgba(47,43,64,0.28)' : 'rgba(47,43,64,0.12)'}`,
+        background: hov ? 'rgba(47,43,64,0.08)' : 'rgba(254,250,255,0.50)',
         color: accent,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.3 : 1,
-        transition: 'background 0.15s, border-color 0.15s',
+        transition: 'all 0.15s ease',
         flexShrink: 0,
-        fontSize: '15px',
+        fontSize: '16px',
       }}
     >
       {dir === 'left' ? '‹' : '›'}
@@ -75,7 +91,7 @@ function ArrowBtn({
   )
 }
 
-/** Styled select / dropdown */
+/** Styled select dropdown */
 function StyledSelect({
   value, onChange, options, ariaLabel,
 }: {
@@ -93,28 +109,27 @@ function StyledSelect({
         style={{
           appearance: 'none',
           WebkitAppearance: 'none',
-          background: 'rgba(254,250,255,0.55)',
-          border: '1px solid rgba(47,43,64,0.18)',
+          background: 'rgba(254,250,255,0.65)',
+          border: '1px solid rgba(47,43,64,0.16)',
           borderRadius: '10px',
           color: accent,
           fontFamily: font,
-          fontSize: '1rem',
+          fontSize: '0.95rem',
           fontWeight: 400,
-          padding: '6px 32px 6px 12px',
+          padding: '6px 30px 6px 12px',
           cursor: 'pointer',
           outline: 'none',
           backdropFilter: 'blur(6px)',
           WebkitBackdropFilter: 'blur(6px)',
-          transition: 'border-color 0.15s',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
         }}
         onFocus={e => (e.currentTarget.style.borderColor = 'rgba(47,43,64,0.40)')}
-        onBlur={e  => (e.currentTarget.style.borderColor = 'rgba(47,43,64,0.18)')}
+        onBlur={e => (e.currentTarget.style.borderColor = 'rgba(47,43,64,0.16)')}
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
-      {/* chevron */}
       <span style={{
         position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
         pointerEvents: 'none', color: accent, fontSize: '11px', opacity: 0.6,
@@ -123,44 +138,49 @@ function StyledSelect({
   )
 }
 
-/** Individual day cell */
+/** Individual Day Cell with integrated weather & shift indicators */
 function DayCell({
-  day, isCurrentMonth, today, selected, onClick,
+  day, isCurrentMonth, today, selected, weather, shift, onClick,
 }: {
   day: number | null
   isCurrentMonth: boolean
   today: boolean
   selected: boolean
+  weather?: WeatherData | null
+  shift?: Shift | null
   onClick?: () => void
 }) {
   const [hov, setHov] = useState(false)
 
   if (day === null) {
-    return <div style={{ aspectRatio: '1', borderRadius: '10px' }} />
+    return <div style={{ minHeight: '52px', borderRadius: '12px' }} />
   }
 
-  let bg2 = 'transparent'
-  let color2 = isCurrentMonth ? text : 'rgba(57,61,59,0.3)'
+  let bg = 'transparent'
+  let color = isCurrentMonth ? text : 'rgba(57,61,59,0.25)'
   let border = '1px solid transparent'
   let fontWeight: React.CSSProperties['fontWeight'] = 400
   let shadow = 'none'
 
   if (today) {
-    bg2    = accent
-    color2 = primary
+    bg = accent
+    color = primary
     border = `1px solid ${accent}`
     fontWeight = 700
-    shadow = '0 2px 8px rgba(47,43,64,0.22)'
+    shadow = '0 3px 10px rgba(47,43,64,0.25)'
   } else if (selected) {
-    bg2    = 'rgba(47,43,64,0.13)'
-    border = `1px solid rgba(47,43,64,0.28)`
-    color2 = accent
+    bg = 'rgba(47,43,64,0.14)'
+    border = `1px solid rgba(47,43,64,0.35)`
+    color = accent
     fontWeight = 600
+    shadow = '0 2px 8px rgba(47,43,64,0.08)'
   } else if (hov && isCurrentMonth) {
-    bg2    = 'rgba(47,43,64,0.07)'
+    bg = 'rgba(47,43,64,0.07)'
     border = '1px solid rgba(47,43,64,0.18)'
-    color2 = accent
+    color = accent
   }
+
+  const isDayOff = shift?.is_day_off
 
   return (
     <button
@@ -170,109 +190,417 @@ function DayCell({
       aria-label={`Day ${day}`}
       aria-pressed={selected}
       style={{
-        aspectRatio: '1',
-        borderRadius: '10px',
+        minHeight: '52px',
+        borderRadius: '12px',
         border,
-        background: bg2,
-        color: color2,
+        background: bg,
+        color,
         fontFamily: font,
-        fontSize: '0.8rem',
+        fontSize: '0.82rem',
         fontWeight,
         cursor: isCurrentMonth ? 'pointer' : 'default',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '4px 2px 3px',
+        transition: 'all 0.15s ease',
         boxShadow: shadow,
         width: '100%',
+        position: 'relative',
+        boxSizing: 'border-box',
       }}
     >
-      {day}
+      {/* Day number */}
+      <span style={{ lineHeight: 1 }}>{day}</span>
+
+      {/* Middle indicator: Weather badge or Day Off emoji */}
+      {isCurrentMonth && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '2px',
+          minHeight: '16px',
+        }}>
+          {weather ? (
+            <span
+              title={`${weather.condition}: ${Math.round(weather.temp)}°`}
+              style={{
+                fontSize: '0.68rem',
+                lineHeight: 1,
+                opacity: today ? 0.95 : 0.85,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '1px',
+              }}
+            >
+              <span>{weather.emoji}</span>
+              <span style={{ fontSize: '0.62rem', fontWeight: 600 }}>
+                {Math.round(weather.temp)}°
+              </span>
+            </span>
+          ) : isDayOff ? (
+            <span title="Day Off 💕" style={{ fontSize: '0.68rem', lineHeight: 1 }}>
+              💕
+            </span>
+          ) : shift ? (
+            <span title="Work shift" style={{ fontSize: '0.65rem', lineHeight: 1 }}>
+              💼
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {/* Bottom dot indicator */}
+      {isCurrentMonth && (
+        <div style={{ display: 'flex', gap: '2px', height: '4px', alignItems: 'center' }}>
+          {isDayOff && (
+            <span style={{
+              width: '4px', height: '4px', borderRadius: '50%',
+              backgroundColor: today ? '#FEFAFF' : '#b05a7a',
+            }} />
+          )}
+          {shift && !isDayOff && (
+            <span style={{
+              width: '4px', height: '4px', borderRadius: '50%',
+              backgroundColor: today ? '#FEFAFF' : '#5a7aaa',
+            }} />
+          )}
+        </div>
+      )}
     </button>
   )
 }
 
-// ─── Main Calendar component ─────────────────────────────────────────────────
+// ─── Main Calendar Component ─────────────────────────────────────────────────
 
 export default function Calendar() {
   const now = new Date()
-  const [viewYear,  setViewYear]  = useState(now.getFullYear())
-  const [viewMonth, setViewMonth] = useState(now.getMonth())   // 0-indexed
-  const [selected,  setSelected]  = useState<{ y: number; m: number; d: number } | null>(null)
+  const [viewYear, setViewYear] = useState(now.getFullYear())
+  const [viewMonth, setViewMonth] = useState(now.getMonth()) // 0-indexed
+  const [selected, setSelected] = useState<{ y: number; m: number; d: number }>({
+    y: now.getFullYear(),
+    m: now.getMonth(),
+    d: now.getDate(),
+  })
 
-  const years = buildYearList(now.getFullYear())
+  // Weather and Shift state
+  const [city, setCity] = useState('Toronto')
+  const [isEditingCity, setIsEditingCity] = useState(false)
+  const [tempCity, setTempCity] = useState('Toronto')
+  const [currentWeather, setCurrentWeather] = useState<WeatherData | null>(null)
+  const [forecast, setForecast] = useState<WeatherData[]>([])
+  const [daysOffWeather, setDaysOffWeather] = useState<DayOffWeather[]>([])
+  const [shifts, setShifts] = useState<Shift[]>([])
+  const [weatherNotice, setWeatherNotice] = useState<string | null>(null)
+  const [loadingWeather, setLoadingWeather] = useState(false)
 
-  // ── Navigation helpers ──
+  // ── Fetch Weather & Shift Data ──
+  const loadData = async (targetCity: string) => {
+    setLoadingWeather(true)
+    try {
+      const [curRes, foreRes, daysOffRes, shiftsData] = await Promise.all([
+        fetchCurrentWeather(targetCity),
+        fetchWeatherForecast(targetCity),
+        fetchDaysOffWeather(targetCity),
+        fetchShifts(),
+      ])
+
+      if (curRes.data) setCurrentWeather(curRes.data)
+      if (foreRes.data) setForecast(foreRes.data)
+      if (daysOffRes.data) setDaysOffWeather(daysOffRes.data)
+      if (shiftsData) setShifts(shiftsData)
+
+      if (curRes.error) {
+        setWeatherNotice(curRes.error)
+      } else {
+        setWeatherNotice(null)
+      }
+    } catch (err: any) {
+      console.warn('Weather data loading error:', err)
+      setWeatherNotice('Could not load live weather.')
+    } finally {
+      setLoadingWeather(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData(city)
+  }, [city])
+
+  // ── Forecast Lookup Map (key: YYYY-MM-DD) ──
+  const forecastMap = useMemo(() => {
+    const map = new Map<string, WeatherData>()
+    forecast.forEach(item => {
+      if (item.date) map.set(item.date, item)
+    })
+    return map
+  }, [forecast])
+
+  // ── Shifts Lookup Map (key: YYYY-MM-DD) ──
+  const shiftsMap = useMemo(() => {
+    const map = new Map<string, Shift>()
+    shifts.forEach(s => {
+      if (s.shift_date) map.set(s.shift_date, s)
+    })
+    return map
+  }, [shifts])
+
+  // ── Selected Date Derived Information ──
+  const selectedKey = toDateKey(selected.y, selected.m, selected.d)
+  const selectedShift = shiftsMap.get(selectedKey)
+  const selectedWeather = forecastMap.get(selectedKey) || (
+    isSameDay(now, selected.y, selected.m, selected.d) ? currentWeather : null
+  )
+
+  // ── Navigation Helpers ──
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-    else                 { setViewMonth(m  => m - 1) }
+    else { setViewMonth(m => m - 1) }
   }
   const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0);  setViewYear(y => y + 1) }
-    else                  { setViewMonth(m  => m + 1) }
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else { setViewMonth(m => m + 1) }
   }
 
-  // ── Build grid cells ──
-  const firstDay   = getFirstDayOfMonth(viewYear, viewMonth)
+  // ── Build Grid Cells ──
+  const firstDay = getFirstDayOfMonth(viewYear, viewMonth)
   const daysInMonth = getDaysInMonth(viewYear, viewMonth)
-
-  // Previous month's trailing days
   const prevMonthDays = getDaysInMonth(
     viewMonth === 0 ? viewYear - 1 : viewYear,
     viewMonth === 0 ? 11 : viewMonth - 1,
   )
 
-  const cells: { day: number; isCurrentMonth: boolean }[] = []
-
-  // Leading cells from previous month
+  const cells: { day: number; isCurrentMonth: boolean; key: string }[] = []
+  // Leading cells
   for (let i = firstDay - 1; i >= 0; i--) {
-    cells.push({ day: prevMonthDays - i, isCurrentMonth: false })
+    const d = prevMonthDays - i
+    const m = viewMonth === 0 ? 11 : viewMonth - 1
+    const y = viewMonth === 0 ? viewYear - 1 : viewYear
+    cells.push({ day: d, isCurrentMonth: false, key: toDateKey(y, m, d) })
   }
   // Current month
   for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ day: d, isCurrentMonth: true })
+    cells.push({ day: d, isCurrentMonth: true, key: toDateKey(viewYear, viewMonth, d) })
   }
-  // Trailing cells to fill 6-row grid (42 cells total)
+  // Trailing cells
   let trailing = 1
   while (cells.length < 42) {
-    cells.push({ day: trailing++, isCurrentMonth: false })
+    const m = viewMonth === 11 ? 0 : viewMonth + 1
+    const y = viewMonth === 11 ? viewYear + 1 : viewYear
+    cells.push({ day: trailing++, isCurrentMonth: false, key: toDateKey(y, m, trailing - 1) })
   }
 
+  const years = buildYearList(now.getFullYear())
   const monthOptions = MONTHS.map((m, i) => ({ value: i, label: m }))
-  const yearOptions  = years.map(y => ({ value: y, label: String(y) }))
+  const yearOptions = years.map(y => ({ value: y, label: String(y) }))
+
+  const handleCitySubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (tempCity.trim()) {
+      setCity(tempCity.trim())
+      setIsEditingCity(false)
+    }
+  }
 
   return (
     <section
       id="calendar"
       style={{
         width: '100%',
-        maxWidth: '520px',
+        maxWidth: '680px',
         margin: '0 auto',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0',
+        gap: '20px',
       }}
     >
-      {/* ── Card ── */}
+      {/* ── Weather Ribbon & City Bar ── */}
       <div style={{
-        borderRadius: '18px',
-        background: 'rgba(254,250,255,0.45)',
+        borderRadius: '16px',
+        background: 'rgba(254,250,255,0.55)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid rgba(47,43,64,0.10)',
+        boxShadow: '0 2px 20px rgba(47,43,64,0.06)',
+        padding: '14px 20px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+      }}>
+        {/* City and Condition */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '24px' }}>
+            {currentWeather ? currentWeather.emoji : '🌤️'}
+          </span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {isEditingCity ? (
+                <form onSubmit={handleCitySubmit} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="text"
+                    value={tempCity}
+                    onChange={e => setTempCity(e.target.value)}
+                    placeholder="Enter city..."
+                    style={{
+                      fontFamily: font,
+                      fontSize: '0.9rem',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(47,43,64,0.3)',
+                      outline: 'none',
+                      background: 'rgba(255,255,255,0.8)',
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    style={{
+                      border: 'none',
+                      background: accent,
+                      color: primary,
+                      borderRadius: '6px',
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      fontFamily: font,
+                    }}
+                  >
+                    Set
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCity(false)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: accent,
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      opacity: 0.6,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => { setTempCity(city); setIsEditingCity(true) }}
+                  title="Click to change city"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontFamily: font,
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    color: accent,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: 0,
+                  }}
+                >
+                  <span>{currentWeather?.city || city}</span>
+                  <span style={{ fontSize: '0.72rem', opacity: 0.5 }}>✏️</span>
+                </button>
+              )}
+            </div>
+            <p style={{
+              margin: 0,
+              fontSize: '0.75rem',
+              color: text,
+              opacity: 0.7,
+              textTransform: 'capitalize',
+            }}>
+              {currentWeather ? currentWeather.description : 'Loading live weather...'}
+            </p>
+          </div>
+        </div>
+
+        {/* Temperature & Quick Stats */}
+        {currentWeather && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{
+                fontFamily: font,
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                color: accent,
+                lineHeight: 1,
+              }}>
+                {Math.round(currentWeather.temp)}°C
+              </span>
+              <div style={{ fontSize: '0.68rem', color: text, opacity: 0.65 }}>
+                Feels {Math.round(currentWeather.feels_like)}° • H: {Math.round(currentWeather.temp_max)}° L: {Math.round(currentWeather.temp_min)}°
+              </div>
+            </div>
+            <button
+              onClick={() => loadData(city)}
+              disabled={loadingWeather}
+              title="Refresh weather"
+              style={{
+                background: 'rgba(47,43,64,0.06)',
+                border: '1px solid rgba(47,43,64,0.12)',
+                borderRadius: '8px',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: accent,
+                transition: 'transform 0.2s',
+                transform: loadingWeather ? 'rotate(180deg)' : 'none',
+              }}
+            >
+              🔄
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Notice Banner (if running in mock/demo mode or notice) */}
+      {weatherNotice && (
+        <div style={{
+          padding: '8px 16px',
+          borderRadius: '12px',
+          background: 'rgba(250, 241, 232, 0.7)',
+          border: '1px solid rgba(176, 90, 122, 0.2)',
+          color: accent,
+          fontSize: '0.74rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <span>💡</span>
+          <span style={{ flex: 1 }}>{weatherNotice}</span>
+        </div>
+      )}
+
+      {/* ── Main Calendar Card ── */}
+      <div style={{
+        borderRadius: '20px',
+        background: 'rgba(254,250,255,0.48)',
         backdropFilter: 'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
         border: '1px solid rgba(47,43,64,0.10)',
         boxShadow: '0 4px 40px rgba(47,43,64,0.08)',
         overflow: 'hidden',
       }}>
-
-        {/* ── Header ── */}
+        {/* Header Controls */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px 10px',
+          padding: '14px 18px 10px',
           borderBottom: '1px solid rgba(47,43,64,0.07)',
           gap: '8px',
           flexWrap: 'wrap',
         }}>
           <ArrowBtn dir="left" onClick={prevMonth} />
 
-          {/* Month + Year selects */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
             <StyledSelect
               ariaLabel="Select month"
@@ -291,17 +619,17 @@ export default function Calendar() {
           <ArrowBtn dir="right" onClick={nextMonth} />
         </div>
 
-        {/* ── Day-of-week labels ── */}
+        {/* Day-of-Week Labels */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
-          gap: '3px',
-          padding: '10px 10px 2px',
+          gap: '4px',
+          padding: '12px 12px 4px',
         }}>
           {DAYS.map(d => (
             <div key={d} style={{
               textAlign: 'center',
-              fontSize: '0.7rem',
+              fontSize: '0.72rem',
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
               color: accent,
@@ -314,61 +642,264 @@ export default function Calendar() {
           ))}
         </div>
 
-        {/* ── Day grid ── */}
+        {/* Day Grid */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
-          gap: '3px',
-          padding: '2px 10px 12px',
+          gap: '4px',
+          padding: '2px 12px 14px',
         }}>
           {cells.map((cell, idx) => {
-            const today = cell.isCurrentMonth && isToday(viewYear, viewMonth, cell.day)
-            const sel   = selected !== null
-              && selected.y === viewYear
-              && selected.m === viewMonth
-              && selected.d === cell.day
-              && cell.isCurrentMonth
+            const isTodayDate = cell.isCurrentMonth && isSameDay(now, viewYear, viewMonth, cell.day)
+            const isSel = selected.y === viewYear && selected.m === viewMonth && selected.d === cell.day && cell.isCurrentMonth
+            const dayWeather = cell.isCurrentMonth ? forecastMap.get(cell.key) || (isTodayDate ? currentWeather : null) : null
+            const dayShift = cell.isCurrentMonth ? shiftsMap.get(cell.key) : null
 
             return (
               <DayCell
                 key={idx}
                 day={cell.day}
                 isCurrentMonth={cell.isCurrentMonth}
-                today={today}
-                selected={sel}
+                today={isTodayDate}
+                selected={isSel}
+                weather={dayWeather}
+                shift={dayShift}
                 onClick={cell.isCurrentMonth ? () => setSelected({ y: viewYear, m: viewMonth, d: cell.day }) : undefined}
               />
             )
           })}
         </div>
 
-        {/* ── Selected date footer ── */}
-        {selected && (
+        {/* ── Interactive Selected Day Weather & Shift Card ── */}
+        <div style={{
+          borderTop: '1px solid rgba(47,43,64,0.08)',
+          background: 'rgba(254,250,255,0.7)',
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}>
+          {/* Date title & Day Off / Shift Tag */}
           <div style={{
-            borderTop: '1px solid rgba(47,43,64,0.07)',
-            padding: '12px 24px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
           }}>
-            <span style={{ fontFamily: font, fontSize: '0.85rem', color: accent, opacity: 0.75 }}>
-              {MONTHS[selected.m]} {selected.d}, {selected.y}
-            </span>
-            <button
-              onClick={() => setSelected(null)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: '0.75rem', color: accent, opacity: 0.4,
-                fontFamily: font, padding: '2px 6px', borderRadius: '6px',
-                transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
-            >
-              Clear
-            </button>
+            <div>
+              <span style={{
+                fontFamily: font,
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: accent,
+              }}>
+                {MONTHS[selected.m]} {selected.d}, {selected.y}
+              </span>
+              {isSameDay(now, selected.y, selected.m, selected.d) && (
+                <span style={{
+                  marginLeft: '8px',
+                  fontSize: '0.68rem',
+                  background: 'rgba(47,43,64,0.08)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  color: accent,
+                }}>
+                  Today
+                </span>
+              )}
+            </div>
+
+            {/* Shift status pill */}
+            {selectedShift?.is_day_off ? (
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: '#b05a7a18',
+                border: '1px solid #b05a7a35',
+                color: '#b05a7a',
+                padding: '3px 10px',
+                borderRadius: '999px',
+              }}>
+                💕 Day Off — Date Ready!
+              </span>
+            ) : selectedShift?.start_time ? (
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: '#5a7aaa18',
+                border: '1px solid #5a7aaa35',
+                color: '#5a7aaa',
+                padding: '3px 10px',
+                borderRadius: '999px',
+              }}>
+                💼 Shift: {selectedShift.start_time} – {selectedShift.end_time || 'Done'}
+              </span>
+            ) : (
+              <span style={{
+                fontSize: '0.72rem',
+                color: text,
+                opacity: 0.5,
+              }}>
+                No shifts recorded
+              </span>
+            )}
           </div>
-        )}
+
+          {/* Weather details for selected day */}
+          {selectedWeather ? (
+            <div style={{
+              borderRadius: '12px',
+              background: 'rgba(254,250,255,0.85)',
+              border: '1px solid rgba(47,43,64,0.1)',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '28px' }}>{selectedWeather.emoji}</span>
+                <div>
+                  <div style={{
+                    fontFamily: font,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    color: accent,
+                    lineHeight: 1,
+                  }}>
+                    {Math.round(selectedWeather.temp)}°C
+                    <span style={{ fontSize: '0.8rem', fontWeight: 400, marginLeft: '6px', opacity: 0.75 }}>
+                      {selectedWeather.condition}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: text, opacity: 0.65, marginTop: '2px' }}>
+                    {selectedWeather.description} • Feels like {Math.round(selectedWeather.feels_like)}°C
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats badges */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{
+                  fontSize: '0.7rem',
+                  color: text,
+                  opacity: 0.8,
+                  background: 'rgba(47,43,64,0.05)',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                }}>
+                  💧 {selectedWeather.humidity}% Humidity
+                </div>
+                <div style={{
+                  fontSize: '0.7rem',
+                  color: text,
+                  opacity: 0.8,
+                  background: 'rgba(47,43,64,0.05)',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                }}>
+                  💨 {selectedWeather.wind_speed} m/s
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              borderRadius: '12px',
+              background: 'rgba(47,43,64,0.03)',
+              padding: '10px 14px',
+              fontSize: '0.74rem',
+              color: text,
+              opacity: 0.6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <span>ℹ️</span>
+              <span>
+                Weather forecast is available within 5 days of today ({city}).
+              </span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* ── Upcoming Days Off & Weather (Date-Planning Ribbon) ── */}
+      {daysOffWeather.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingInline: '4px',
+          }}>
+            <span style={{
+              fontFamily: font,
+              fontSize: '0.85rem',
+              color: accent,
+              opacity: 0.75,
+              letterSpacing: '0.04em',
+            }}>
+              Upcoming Days Off 💕
+            </span>
+            <span style={{ fontSize: '0.72rem', color: text, opacity: 0.5 }}>
+              Perfect dates ahead
+            </span>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '10px',
+          }}>
+            {daysOffWeather.slice(0, 4).map((dOff, idx) => (
+              <div
+                key={idx}
+                style={{
+                  borderRadius: '14px',
+                  background: 'rgba(254,250,255,0.5)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(47,43,64,0.10)',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  boxShadow: '0 2px 8px rgba(47,43,64,0.04)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontFamily: font, fontSize: '0.78rem', color: accent }}>
+                    {dOff.shift_date}
+                  </span>
+                  <span>💕</span>
+                </div>
+
+                {dOff.weather ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '18px' }}>{dOff.weather.emoji}</span>
+                    <span style={{ fontFamily: font, fontSize: '0.85rem', fontWeight: 600, color: accent }}>
+                      {Math.round(dOff.weather.temp)}°C
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: text, opacity: 0.6 }}>
+                      {dOff.weather.condition}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.68rem', color: text, opacity: 0.5, marginTop: '4px' }}>
+                    Future date planner
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   )
 }
