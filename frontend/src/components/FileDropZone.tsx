@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { uploadFiles, type UploadSummary } from '../services/api'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,8 @@ interface FileIdentity {
   icon:  string   // emoji shorthand
   color: string   // accent colour for badge
 }
+
+type UploadStatus = 'idle' | 'uploading' | 'done' | 'error'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,6 +56,11 @@ export default function FileDropZone() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Upload state
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0, currentFile: '' })
+  const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null)
+
   // Build a FileEntry from a raw File
   const buildEntry = useCallback((file: File): FileEntry => {
     const preview = file.type.startsWith('image/')
@@ -86,6 +94,37 @@ export default function FileDropZone() {
   const clearAll = () => {
     entries.forEach(e => { if (e.preview) URL.revokeObjectURL(e.preview) })
     setEntries([])
+    setUploadStatus('idle')
+    setUploadSummary(null)
+  }
+
+  // Submit / upload all files
+  const handleSubmit = async () => {
+    if (entries.length === 0 || uploadStatus === 'uploading') return
+
+    setUploadStatus('uploading')
+    setUploadSummary(null)
+    setUploadProgress({ completed: 0, total: entries.length, currentFile: '' })
+
+    try {
+      const files = entries.map(e => e.file)
+      const summary = await uploadFiles(files, (completed, total, currentFile) => {
+        setUploadProgress({ completed, total, currentFile })
+      })
+
+      setUploadSummary(summary)
+      setUploadStatus(summary.failedCount > 0 && summary.successCount === 0 ? 'error' : 'done')
+
+      // If all succeeded, clear entries after a brief delay so user sees the summary
+      if (summary.failedCount === 0) {
+        setTimeout(() => {
+          entries.forEach(e => { if (e.preview) URL.revokeObjectURL(e.preview) })
+          setEntries([])
+        }, 3000)
+      }
+    } catch {
+      setUploadStatus('error')
+    }
   }
 
   // ── Drag handlers ──
@@ -120,6 +159,11 @@ export default function FileDropZone() {
     WebkitBackdropFilter: 'blur(8px)',
     userSelect: 'none',
   }
+
+  const isUploading = uploadStatus === 'uploading'
+  const progressPct = uploadProgress.total > 0
+    ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
+    : 0
 
   return (
     <section style={{ width: '100%', maxWidth: '680px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -178,15 +222,16 @@ export default function FileDropZone() {
             </span>
             <button
               onClick={clearAll}
+              disabled={isUploading}
               style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: '0.75rem', color: 'var(--color-accent)', opacity: 0.5,
+                background: 'none', border: 'none', cursor: isUploading ? 'not-allowed' : 'pointer',
+                fontSize: '0.75rem', color: 'var(--color-accent)', opacity: isUploading ? 0.3 : 0.5,
                 fontFamily: "'ADLaM Display', cursive",
                 padding: '4px 8px', borderRadius: '8px',
                 transition: 'opacity 0.15s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+              onMouseEnter={e => !isUploading && (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={e => !isUploading && (e.currentTarget.style.opacity = '0.5')}
             >
               Clear all
             </button>
@@ -194,17 +239,159 @@ export default function FileDropZone() {
 
           {/* Individual file cards */}
           {entries.map(entry => (
-            <FileCard key={entry.id} entry={entry} onRemove={() => removeEntry(entry.id)} />
+            <FileCard key={entry.id} entry={entry} onRemove={() => removeEntry(entry.id)} disabled={isUploading} />
           ))}
         </div>
       )}
+
+      {/* ── Upload progress bar ── */}
+      {isUploading && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: '8px',
+          padding: '16px 20px',
+          borderRadius: '14px',
+          background: 'rgba(254,250,255,0.55)',
+          backdropFilter: 'blur(6px)',
+          border: '1px solid rgba(47,43,64,0.10)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{
+              fontSize: '0.8rem', color: 'var(--color-accent)',
+              fontFamily: "'ADLaM Display', cursive",
+            }}>
+              Analyzing {uploadProgress.currentFile}…
+            </span>
+            <span style={{
+              fontSize: '0.72rem', color: 'var(--color-accent)', opacity: 0.6,
+            }}>
+              {uploadProgress.completed}/{uploadProgress.total}
+            </span>
+          </div>
+          <div style={{
+            height: '6px', borderRadius: '999px',
+            background: 'rgba(47,43,64,0.10)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: '999px',
+              width: `${progressPct}%`,
+              background: 'linear-gradient(90deg, #7c6fa0, #b05a7a)',
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Upload summary (success/error) ── */}
+      {uploadSummary && uploadStatus !== 'uploading' && (
+        <div style={{
+          padding: '16px 20px',
+          borderRadius: '14px',
+          background: uploadStatus === 'error'
+            ? 'rgba(176,90,122,0.12)'
+            : 'rgba(90,138,106,0.12)',
+          border: `1px solid ${uploadStatus === 'error' ? 'rgba(176,90,122,0.25)' : 'rgba(90,138,106,0.25)'}`,
+          display: 'flex', flexDirection: 'column', gap: '6px',
+        }}>
+          <span style={{
+            fontSize: '0.88rem', fontFamily: "'ADLaM Display', cursive",
+            color: uploadStatus === 'error' ? '#b05a7a' : '#5a8a6a',
+            fontWeight: 600,
+          }}>
+            {uploadStatus === 'error'
+              ? '⚠️ Upload failed'
+              : `✨ ${uploadSummary.totalShifts} date${uploadSummary.totalShifts !== 1 ? 's' : ''} extracted from ${uploadSummary.successCount} file${uploadSummary.successCount !== 1 ? 's' : ''}`
+            }
+          </span>
+          {uploadSummary.totalDaysOff > 0 && uploadStatus === 'done' && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-accent)', opacity: 0.65 }}>
+              Including {uploadSummary.totalDaysOff} day{uploadSummary.totalDaysOff !== 1 ? 's' : ''} off 🩷
+            </span>
+          )}
+          {uploadSummary.failedCount > 0 && (
+            <span style={{ fontSize: '0.78rem', color: '#b05a7a', opacity: 0.8 }}>
+              {uploadSummary.failedCount} file{uploadSummary.failedCount !== 1 ? 's' : ''} failed — try re-uploading
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Submit / Confirm button ── */}
+      {entries.length > 0 && uploadStatus !== 'done' && (
+        <button
+          id="submit-files-btn"
+          onClick={handleSubmit}
+          disabled={isUploading}
+          style={{
+            padding: '14px 36px',
+            borderRadius: '14px',
+            border: 'none',
+            cursor: isUploading ? 'not-allowed' : 'pointer',
+            fontFamily: "'ADLaM Display', cursive",
+            fontSize: '1rem',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            color: '#FEFAFF',
+            background: isUploading
+              ? 'rgba(47,43,64,0.35)'
+              : 'linear-gradient(135deg, #2f2b40 0%, #5a4a6a 50%, #7c6fa0 100%)',
+            boxShadow: isUploading
+              ? 'none'
+              : '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)',
+            transition: 'all 0.3s ease',
+            transform: 'translateY(0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            alignSelf: 'center',
+            minWidth: '220px',
+          }}
+          onMouseEnter={e => {
+            if (!isUploading) {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(47,43,64,0.35), 0 2px 8px rgba(124,111,160,0.3)'
+            }
+          }}
+          onMouseLeave={e => {
+            if (!isUploading) {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)'
+            }
+          }}
+        >
+          {isUploading ? (
+            <>
+              <span style={{
+                display: 'inline-block', width: '16px', height: '16px',
+                border: '2px solid rgba(254,250,255,0.3)',
+                borderTopColor: '#FEFAFF',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+              Analyzing…
+            </>
+          ) : (
+            <>
+              ✨ Confirm & Analyze
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Keyframes for spinner */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </section>
   )
 }
 
 // ─── FileCard sub-component ───────────────────────────────────────────────────
 
-function FileCard({ entry, onRemove }: { entry: FileEntry; onRemove: () => void }) {
+function FileCard({ entry, onRemove, disabled }: { entry: FileEntry; onRemove: () => void; disabled?: boolean }) {
   const { file, preview, identified } = entry
 
   return (
@@ -217,7 +404,8 @@ function FileCard({ entry, onRemove }: { entry: FileEntry; onRemove: () => void 
       WebkitBackdropFilter: 'blur(6px)',
       border: '1px solid rgba(47,43,64,0.10)',
       boxShadow: '0 1px 6px rgba(47,43,64,0.06)',
-      transition: 'box-shadow 0.2s',
+      transition: 'box-shadow 0.2s, opacity 0.2s',
+      opacity: disabled ? 0.6 : 1,
     }}>
 
       {/* Thumbnail or icon */}
@@ -275,15 +463,17 @@ function FileCard({ entry, onRemove }: { entry: FileEntry; onRemove: () => void 
       <button
         onClick={e => { e.stopPropagation(); onRemove() }}
         aria-label={`Remove ${file.name}`}
+        disabled={disabled}
         style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--color-accent)', opacity: 0.35, fontSize: '18px',
+          background: 'none', border: 'none',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          color: 'var(--color-accent)', opacity: disabled ? 0.15 : 0.35, fontSize: '18px',
           lineHeight: 1, padding: '4px', borderRadius: '6px',
           transition: 'opacity 0.15s',
           flexShrink: 0,
         }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '0.35')}
+        onMouseEnter={e => !disabled && (e.currentTarget.style.opacity = '0.8')}
+        onMouseLeave={e => !disabled && (e.currentTarget.style.opacity = '0.35')}
       >
         ✕
       </button>

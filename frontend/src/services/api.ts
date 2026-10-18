@@ -214,3 +214,80 @@ export async function fetchShifts(): Promise<Shift[]> {
     return []
   }
 }
+
+// ─── Upload Response Types ────────────────────────────────────────────────────
+
+export interface UploadResult {
+  message: string
+  provider_used?: string
+  model_used?: string
+  notes?: string
+  saved_count: number
+  working_shifts_count?: number
+  days_off_count: number
+  shifts: Shift[]
+}
+
+export interface UploadSummary {
+  totalFiles: number
+  successCount: number
+  failedCount: number
+  totalShifts: number
+  totalDaysOff: number
+  results: { filename: string; result?: UploadResult; error?: string }[]
+}
+
+/**
+ * Upload multiple roster screenshot files sequentially to the backend.
+ * Each file is sent individually to /shifts/upload and results are aggregated.
+ * Calls `onProgress` after each file completes so the UI can update.
+ */
+export async function uploadFiles(
+  files: File[],
+  onProgress?: (completed: number, total: number, filename: string) => void,
+): Promise<UploadSummary> {
+  const summary: UploadSummary = {
+    totalFiles: files.length,
+    successCount: 0,
+    failedCount: 0,
+    totalShifts: 0,
+    totalDaysOff: 0,
+    results: [],
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    onProgress?.(i, files.length, file.name)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`${API_BASE}/shifts/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        let errMsg = `Upload failed (${res.status})`
+        try {
+          const errJson = await res.json()
+          if (errJson.detail) errMsg = typeof errJson.detail === 'string' ? errJson.detail : JSON.stringify(errJson.detail)
+        } catch { /* ignore */ }
+        throw new Error(errMsg)
+      }
+
+      const result: UploadResult = await res.json()
+      summary.successCount++
+      summary.totalShifts += result.saved_count
+      summary.totalDaysOff += result.days_off_count
+      summary.results.push({ filename: file.name, result })
+    } catch (err: any) {
+      summary.failedCount++
+      summary.results.push({ filename: file.name, error: err?.message || 'Upload failed' })
+    }
+  }
+
+  onProgress?.(files.length, files.length, 'Done')
+  return summary
+}
