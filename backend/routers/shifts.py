@@ -19,7 +19,11 @@ else:
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ALLOWED_TYPES = {
+    "image/jpeg", "image/png", "image/webp", "image/jfif", "image/jpg",
+    "image/pjpeg", "image/gif", "application/octet-stream"
+}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".jfif", ".pjpeg", ".gif"}
 
 
 # Endpoint to upload a roster screenshot and extract/upsert shifts with AI
@@ -28,11 +32,16 @@ async def upload_roster(
     file: UploadFile = File(...),
     session: Session = Depends(get_session)
 ):
-    # Validate that the uploaded file is an image
-    if file.content_type not in ALLOWED_TYPES:
+    # Validate that the uploaded file is an image by MIME type or extension
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    is_valid_type = (
+        (file.content_type and (file.content_type.startswith("image/") or file.content_type in ALLOWED_TYPES))
+        or ext in IMAGE_EXTENSIONS
+    )
+    if not is_valid_type:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. Please upload a JPEG, PNG, or WebP image."
+            detail=f"Invalid file type '{file.content_type}'. Please upload a screenshot or image (PNG, JPEG, WebP, etc.)."
         )
 
     # Save the file with a unique filename

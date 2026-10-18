@@ -24,9 +24,9 @@ function identifyFile(file: File): FileIdentity {
   const { type, name } = file
   const ext = name.split('.').pop()?.toLowerCase() ?? ''
 
-  if (type.startsWith('image/'))
+  if (type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'pjpeg', 'gif', 'bmp', 'svg'].includes(ext))
     return { label: 'Image',       icon: '🖼️',  color: '#7c6fa0' }
-  if (type === 'application/pdf')
+  if (type === 'application/pdf' || ext === 'pdf')
     return { label: 'PDF',         icon: '📄',  color: '#b05a7a' }
   if (type.startsWith('text/') || ['txt', 'md', 'csv'].includes(ext))
     return { label: 'Text file',   icon: '📝',  color: '#5a8a6a' }
@@ -63,13 +63,15 @@ export default function FileDropZone() {
 
   // Build a FileEntry from a raw File
   const buildEntry = useCallback((file: File): FileEntry => {
-    const preview = file.type.startsWith('image/')
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    const isImg = file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'jfif', 'pjpeg', 'gif', 'bmp'].includes(ext)
+    const preview = isImg
       ? URL.createObjectURL(file)
       : null
     return { id: uid(), file, preview, identified: identifyFile(file) }
   }, [])
 
-  // Add files — deduplicates by name+size
+  // Add files — deduplicates by name+size and clears any previous upload error state
   const addFiles = useCallback((raw: FileList | File[]) => {
     const incoming = Array.from(raw)
     setEntries(prev => {
@@ -79,6 +81,9 @@ export default function FileDropZone() {
         .map(buildEntry)
       return [...prev, ...fresh]
     })
+    // Reset upload status and summary when new files are dropped!
+    setUploadStatus('idle')
+    setUploadSummary(null)
   }, [buildEntry])
 
   // Remove a single entry (and revoke its object URL to avoid memory leaks)
@@ -204,7 +209,7 @@ export default function FileDropZone() {
           ref={inputRef}
           type="file"
           multiple
-          accept="image/*,application/pdf,.txt,.csv,.xls,.xlsx"
+          accept="image/*,.jfif,.jpg,.jpeg,.png,.webp,.pjpeg,application/pdf,.txt,.csv,.xls,.xlsx"
           style={{ display: 'none' }}
           onChange={onInputChange}
           aria-hidden="true"

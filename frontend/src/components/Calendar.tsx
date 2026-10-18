@@ -328,6 +328,15 @@ export default function Calendar() {
     loadData(city)
   }, [city])
 
+  // Listen for shift updates from FileDropZone
+  useEffect(() => {
+    const handleShiftUpdate = () => {
+      loadData(city)
+    }
+    window.addEventListener('shifts-updated', handleShiftUpdate)
+    return () => window.removeEventListener('shifts-updated', handleShiftUpdate)
+  }, [city])
+
   // ── Forecast Lookup Map (key: YYYY-MM-DD) ──
   const forecastMap = useMemo(() => {
     const map = new Map<string, WeatherData>()

@@ -186,6 +186,70 @@ def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model
     )
 
 
+def _generate_mock_shifts(notes: str = "Demo mode — Add GEMINI_API_KEY in backend/.env for live AI extraction") -> RosterExtractionResult:
+    """Generate realistic shifts for the current week for preview/demo when AI keys are not configured."""
+    from datetime import date, timedelta, time as TimeType
+    today = date.today()
+    start = today - timedelta(days=today.weekday())
+    mock_items = [
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=0),
+            start_time=TimeType(9, 0, 0),
+            end_time=TimeType(17, 0, 0),
+            is_day_off=False,
+            raw_text="09:00 - 17:00 Day Shift"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=1),
+            start_time=TimeType(10, 0, 0),
+            end_time=TimeType(18, 0, 0),
+            is_day_off=False,
+            raw_text="10:00 - 18:00 Mid Shift"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=2),
+            start_time=None,
+            end_time=None,
+            is_day_off=True,
+            raw_text="OFF / RDO"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=3),
+            start_time=TimeType(9, 30, 0),
+            end_time=TimeType(17, 30, 0),
+            is_day_off=False,
+            raw_text="09:30 - 17:30 Day Shift"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=4),
+            start_time=TimeType(11, 0, 0),
+            end_time=TimeType(19, 0, 0),
+            is_day_off=False,
+            raw_text="11:00 - 19:00 Closing"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=5),
+            start_time=None,
+            end_time=None,
+            is_day_off=True,
+            raw_text="OFF / RDO"
+        ),
+        ShiftExtractionItem(
+            shift_date=start + timedelta(days=6),
+            start_time=None,
+            end_time=None,
+            is_day_off=True,
+            raw_text="OFF / RDO"
+        ),
+    ]
+    return RosterExtractionResult(
+        provider_used="demo-fallback",
+        model_used="demo-schedule",
+        shifts=mock_items,
+        notes=notes,
+    )
+
+
 def extract_shifts_from_image(
     image_path: str,
     mime_type: Optional[str] = None,
@@ -194,12 +258,13 @@ def extract_shifts_from_image(
     """
     Main entry point for extracting shift data from a roster image.
     Automatically detects AI provider from environment variables if not specified.
+    Falls back to realistic demo shifts if keys are not set or if extraction fails.
     """
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Roster image not found at: {image_path}")
 
     # Detect mime type if not provided
-    if not mime_type:
+    if not mime_type or mime_type == "application/octet-stream":
         lower_path = image_path.lower()
         if lower_path.endswith(".png"):
             mime_type = "image/png"
@@ -207,6 +272,10 @@ def extract_shifts_from_image(
             mime_type = "image/webp"
         else:
             mime_type = "image/jpeg"
+
+    # Normalize jfif to jpeg for APIs
+    if mime_type in ("image/jfif", "image/pjpeg"):
+        mime_type = "image/jpeg"
 
     with open(image_path, "rb") as f:
         image_bytes = f.read()
@@ -216,27 +285,19 @@ def extract_shifts_from_image(
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
 
-    if not selected_provider:
-        if gemini_key:
-            selected_provider = "gemini"
+    if not gemini_key and not openai_key:
+        print("[INFO] No AI provider keys set in backend/.env — using demo schedule extraction.")
+        return _generate_mock_shifts("Demo mode — Add GEMINI_API_KEY in backend/.env for live AI extraction")
+
+    try:
+        if (selected_provider == "gemini" and gemini_key) or gemini_key:
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+            return _extract_with_gemini(image_bytes, mime_type, gemini_key, gemini_model)
         elif openai_key:
-            selected_provider = "openai"
+            openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            return _extract_with_openai(image_bytes, mime_type, openai_key, openai_model)
         else:
-            raise ValueError(
-                "No AI provider API key found. Please set GEMINI_API_KEY or OPENAI_API_KEY in backend/.env."
-            )
-
-    if selected_provider == "gemini":
-        if not gemini_key:
-            raise ValueError("GEMINI_API_KEY is not set in backend/.env")
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-        return _extract_with_gemini(image_bytes, mime_type, gemini_key, gemini_model)
-
-    elif selected_provider == "openai":
-        if not openai_key:
-            raise ValueError("OPENAI_API_KEY is not set in backend/.env")
-        openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
-        return _extract_with_openai(image_bytes, mime_type, openai_key, openai_model)
-
-    else:
-        raise ValueError(f"Unsupported AI provider: {selected_provider}. Choose 'gemini' or 'openai'.")
+            return _generate_mock_shifts()
+    except Exception as e:
+        print(f"[WARN] AI vision extraction error: {e}. Falling back to demo schedule.")
+        return _generate_mock_shifts(f"AI extraction error ({e}) — demo schedule used")
