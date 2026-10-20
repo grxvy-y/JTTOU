@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { uploadFiles, type UploadSummary } from '../services/api'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -49,6 +49,9 @@ function uid() {
   return Math.random().toString(36).slice(2)
 }
 
+// ─── Easing constant ─────────────────────────────────────────────────────────
+const ease = 'cubic-bezier(0.4, 0, 0.2, 1)'
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function FileDropZone() {
@@ -85,6 +88,18 @@ export default function FileDropZone() {
     setUploadStatus('idle')
     setUploadSummary(null)
   }, [buildEntry])
+
+  // Support ?demo=1 query parameter to demonstrate / test the layout transition and right panel
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('demo') === '1') {
+      const demoFiles = [
+        new File(['mock schedule image content'], 'october_roster_screenshot.png', { type: 'image/png' }),
+        new File(['mock schedule pdf content'], 'shifts_weekly_overview.pdf', { type: 'application/pdf' }),
+        new File(['mock text notes content'], 'shift_swap_notes.txt', { type: 'text/plain' }),
+      ]
+      addFiles(demoFiles)
+    }
+  }, [addFiles])
 
   // Remove a single entry (and revoke its object URL to avoid memory leaks)
   const removeEntry = (id: string) => {
@@ -146,251 +161,422 @@ export default function FileDropZone() {
     e.target.value = ''   // reset so same file can be re-added later
   }
 
-  // ── Styles ──
+  // ── Derived state ──
+  const hasFiles = entries.length > 0
+  const isUploading = uploadStatus === 'uploading'
+  const progressPct = uploadProgress.total > 0
+    ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
+    : 0
+
+  // ── Dropzone styles ──
   const zone: React.CSSProperties = {
     border: `2px dashed ${dragging ? 'var(--color-accent)' : 'rgba(47,43,64,0.25)'}`,
     borderRadius: '20px',
-    padding: '48px 32px',
+    padding: hasFiles ? '32px 24px' : '48px 32px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '12px',
     cursor: 'pointer',
-    transition: 'border-color 0.2s, background 0.2s',
+    transition: `border-color 0.2s, background 0.2s, padding 0.5s ${ease}`,
     background: dragging
       ? 'rgba(47,43,64,0.07)'
       : 'rgba(254,250,255,0.35)',
     backdropFilter: 'blur(8px)',
     WebkitBackdropFilter: 'blur(8px)',
     userSelect: 'none',
+    width: '100%',
   }
 
-  const isUploading = uploadStatus === 'uploading'
-  const progressPct = uploadProgress.total > 0
-    ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
-    : 0
-
   return (
-    <section style={{ width: '100%', maxWidth: '680px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-      {/* ── Drop zone ── */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label="File drop zone. Click or drag files here."
-        style={zone}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
-      >
-        {/* Cloud upload icon */}
-        <div style={{
-          width: '64px', height: '64px', borderRadius: '16px',
-          background: 'rgba(47,43,64,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '28px',
-          transition: 'transform 0.2s',
-          transform: dragging ? 'scale(1.12)' : 'scale(1)',
-        }}>
-          {dragging ? '📂' : '📁'}
-        </div>
-
-        <p style={{ margin: 0, fontFamily: "'ADLaM Display', cursive", fontSize: '1.05rem', color: 'var(--color-accent)' }}>
-          {dragging ? 'Drop to upload' : 'Drop files here, or click to browse'}
-        </p>
-        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text)', opacity: 0.55 }}>
-          Images, PDFs, text files — multiple allowed
-        </p>
-
-        {/* Hidden file input — accept list opens photo gallery on mobile */}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept="image/*,.jfif,.jpg,.jpeg,.png,.webp,.pjpeg,application/pdf,.txt,.csv,.xls,.xlsx"
-          style={{ display: 'none' }}
-          onChange={onInputChange}
-          aria-hidden="true"
-        />
-      </div>
-
-      {/* ── File list ── */}
-      {entries.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-          {/* Header row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--color-accent)', opacity: 0.7, fontFamily: "'ADLaM Display', cursive" }}>
-              {entries.length} file{entries.length !== 1 ? 's' : ''} added
-            </span>
-            <button
-              onClick={clearAll}
-              disabled={isUploading}
-              style={{
-                background: 'none', border: 'none', cursor: isUploading ? 'not-allowed' : 'pointer',
-                fontSize: '0.75rem', color: 'var(--color-accent)', opacity: isUploading ? 0.3 : 0.5,
-                fontFamily: "'ADLaM Display', cursive",
-                padding: '4px 8px', borderRadius: '8px',
-                transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={e => !isUploading && (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={e => !isUploading && (e.currentTarget.style.opacity = '0.5')}
-            >
-              Clear all
-            </button>
-          </div>
-
-          {/* Individual file cards */}
-          {entries.map(entry => (
-            <FileCard key={entry.id} entry={entry} onRemove={() => removeEntry(entry.id)} disabled={isUploading} />
-          ))}
-        </div>
-      )}
-
-      {/* ── Upload progress bar ── */}
-      {isUploading && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: '8px',
-          padding: '16px 20px',
-          borderRadius: '14px',
-          background: 'rgba(254,250,255,0.55)',
-          backdropFilter: 'blur(6px)',
-          border: '1px solid rgba(47,43,64,0.10)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{
-              fontSize: '0.8rem', color: 'var(--color-accent)',
-              fontFamily: "'ADLaM Display', cursive",
-            }}>
-              Analyzing {uploadProgress.currentFile}…
-            </span>
-            <span style={{
-              fontSize: '0.72rem', color: 'var(--color-accent)', opacity: 0.6,
-            }}>
-              {uploadProgress.completed}/{uploadProgress.total}
-            </span>
-          </div>
-          <div style={{
-            height: '6px', borderRadius: '999px',
-            background: 'rgba(47,43,64,0.10)',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              height: '100%', borderRadius: '999px',
-              width: `${progressPct}%`,
-              background: 'linear-gradient(90deg, #7c6fa0, #b05a7a)',
-              transition: 'width 0.4s ease',
-            }} />
-          </div>
-        </div>
-      )}
-
-      {/* ── Upload summary (success/error) ── */}
-      {uploadSummary && uploadStatus !== 'uploading' && (
-        <div style={{
-          padding: '16px 20px',
-          borderRadius: '14px',
-          background: uploadStatus === 'error'
-            ? 'rgba(176,90,122,0.12)'
-            : 'rgba(90,138,106,0.12)',
-          border: `1px solid ${uploadStatus === 'error' ? 'rgba(176,90,122,0.25)' : 'rgba(90,138,106,0.25)'}`,
-          display: 'flex', flexDirection: 'column', gap: '6px',
-        }}>
-          <span style={{
-            fontSize: '0.88rem', fontFamily: "'ADLaM Display', cursive",
-            color: uploadStatus === 'error' ? '#b05a7a' : '#5a8a6a',
-            fontWeight: 600,
-          }}>
-            {uploadStatus === 'error'
-              ? '⚠️ Upload failed'
-              : `✨ ${uploadSummary.totalShifts} date${uploadSummary.totalShifts !== 1 ? 's' : ''} extracted from ${uploadSummary.successCount} file${uploadSummary.successCount !== 1 ? 's' : ''}`
-            }
-          </span>
-          {uploadSummary.totalDaysOff > 0 && uploadStatus === 'done' && (
-            <span style={{ fontSize: '0.78rem', color: 'var(--color-accent)', opacity: 0.65 }}>
-              Including {uploadSummary.totalDaysOff} day{uploadSummary.totalDaysOff !== 1 ? 's' : ''} off 🩷
-            </span>
-          )}
-          {uploadSummary.failedCount > 0 && (
-            <span style={{ fontSize: '0.78rem', color: '#b05a7a', opacity: 0.8 }}>
-              {uploadSummary.failedCount} file{uploadSummary.failedCount !== 1 ? 's' : ''} failed — try re-uploading
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Submit / Confirm button ── */}
-      {entries.length > 0 && uploadStatus !== 'done' && (
-        <button
-          id="submit-files-btn"
-          onClick={handleSubmit}
-          disabled={isUploading}
-          style={{
-            padding: '14px 36px',
-            borderRadius: '14px',
-            border: 'none',
-            cursor: isUploading ? 'not-allowed' : 'pointer',
-            fontFamily: "'ADLaM Display', cursive",
-            fontSize: '1rem',
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            color: '#FEFAFF',
-            background: isUploading
-              ? 'rgba(47,43,64,0.35)'
-              : 'linear-gradient(135deg, #2f2b40 0%, #5a4a6a 50%, #7c6fa0 100%)',
-            boxShadow: isUploading
-              ? 'none'
-              : '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)',
-            transition: 'all 0.3s ease',
-            transform: 'translateY(0)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            alignSelf: 'center',
-            minWidth: '220px',
-          }}
-          onMouseEnter={e => {
-            if (!isUploading) {
-              e.currentTarget.style.transform = 'translateY(-2px)'
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(47,43,64,0.35), 0 2px 8px rgba(124,111,160,0.3)'
-            }
-          }}
-          onMouseLeave={e => {
-            if (!isUploading) {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)'
-            }
-          }}
-        >
-          {isUploading ? (
-            <>
-              <span style={{
-                display: 'inline-block', width: '16px', height: '16px',
-                border: '2px solid rgba(254,250,255,0.3)',
-                borderTopColor: '#FEFAFF',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite',
-              }} />
-              Analyzing…
-            </>
-          ) : (
-            <>
-              ✨ Confirm & Analyze
-            </>
-          )}
-        </button>
-      )}
-
-      {/* Keyframes for spinner */}
+    <>
+      {/* ── Scoped CSS for animations & responsive ── */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        @keyframes fdz-slideIn {
+          from { opacity: 0; transform: translateX(40px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fdz-cardIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .fdz-right-panel {
+          animation: fdz-slideIn 0.55s ${ease} both;
+        }
+        .fdz-file-card {
+          animation: fdz-cardIn 0.3s ${ease} both;
+        }
+        .fdz-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .fdz-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .fdz-scroll::-webkit-scrollbar-thumb {
+          background: rgba(47,43,64,0.12);
+          border-radius: 999px;
+        }
+        .fdz-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(47,43,64,0.25);
+        }
+        @media (max-width: 768px) {
+          .fdz-container.fdz-expanded {
+            flex-direction: column !important;
+            max-width: 680px !important;
+          }
+          .fdz-left.fdz-expanded {
+            align-items: center !important;
+            text-align: center !important;
+          }
+          .fdz-heading.fdz-expanded {
+            align-items: center !important;
+          }
+        }
       `}</style>
-    </section>
+
+      {/* ── Main container — transitions between centered / split layout ── */}
+      <section
+        className={`fdz-container ${hasFiles ? 'fdz-expanded' : ''}`}
+        style={{
+          width: '100%',
+          maxWidth: hasFiles ? '1080px' : '680px',
+          display: 'flex',
+          flexDirection: hasFiles ? 'row' : 'column',
+          alignItems: hasFiles ? 'flex-start' : 'center',
+          gap: hasFiles ? '36px' : '24px',
+          transition: `max-width 0.6s ${ease}, gap 0.6s ${ease}`,
+        }}
+      >
+        {/* ═══ LEFT COLUMN: Heading + Dropzone ═══ */}
+        <div
+          className={`fdz-left ${hasFiles ? 'fdz-expanded' : ''}`}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: hasFiles ? 'flex-start' : 'center',
+            textAlign: hasFiles ? 'left' as const : 'center' as const,
+            gap: hasFiles ? '18px' : '24px',
+            flex: hasFiles ? '0 0 46%' : '1 1 100%',
+            minWidth: 0,
+            transition: `all 0.6s ${ease}`,
+          }}
+        >
+          {/* ── Heading group ── */}
+          <div
+            className={`fdz-heading ${hasFiles ? 'fdz-expanded' : ''}`}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              alignItems: hasFiles ? 'flex-start' : 'center',
+              transition: `all 0.6s ${ease}`,
+            }}
+          >
+            <p style={{
+              fontSize: '0.72rem', letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'var(--color-accent)', opacity: 0.55, margin: 0,
+            }}>
+              JTTOU
+            </p>
+            <h1 style={{
+              fontSize: hasFiles ? 'clamp(1.5rem, 3.5vw, 2.2rem)' : 'clamp(2rem, 5vw, 3.2rem)',
+              fontWeight: 400,
+              color: 'var(--color-accent)',
+              margin: 0,
+              lineHeight: 1.15,
+              transition: `font-size 0.6s ${ease}`,
+            }}>
+              Upload screenshot(s)
+            </h1>
+            <p style={{
+              fontSize: hasFiles ? '0.88rem' : '1rem',
+              color: 'var(--color-text)',
+              maxWidth: '420px',
+              lineHeight: 1.65,
+              opacity: 0.7,
+              margin: 0,
+              transition: `font-size 0.6s ${ease}`,
+            }}>
+              Drop your schedule screenshots/files here — the AI will read them and extract for pookie 🩷
+            </p>
+          </div>
+
+          {/* ── Drop zone ── */}
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="File drop zone. Click or drag files here."
+            style={zone}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
+          >
+            {/* Cloud upload icon */}
+            <div style={{
+              width: hasFiles ? '48px' : '64px', height: hasFiles ? '48px' : '64px',
+              borderRadius: hasFiles ? '12px' : '16px',
+              background: 'rgba(47,43,64,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: hasFiles ? '22px' : '28px',
+              transition: `all 0.3s ${ease}`,
+              transform: dragging ? 'scale(1.12)' : 'scale(1)',
+            }}>
+              {dragging ? '📂' : '📁'}
+            </div>
+
+            <p style={{ margin: 0, fontFamily: "'ADLaM Display', cursive", fontSize: hasFiles ? '0.92rem' : '1.05rem', color: 'var(--color-accent)', transition: `font-size 0.5s ${ease}` }}>
+              {dragging ? 'Drop to upload' : (hasFiles ? 'Drop more files here' : 'Drop files here, or click to browse')}
+            </p>
+            {!hasFiles && (
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text)', opacity: 0.55 }}>
+                Images, PDFs, text files — multiple allowed
+              </p>
+            )}
+
+            {/* Hidden file input */}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept="image/*,.jfif,.jpg,.jpeg,.png,.webp,.pjpeg,application/pdf,.txt,.csv,.xls,.xlsx"
+              style={{ display: 'none' }}
+              onChange={onInputChange}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+
+        {/* ═══ RIGHT COLUMN: File Panel ═══ */}
+        {hasFiles && (
+          <div
+            className="fdz-right-panel"
+            style={{
+              flex: '1',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              padding: '20px',
+              borderRadius: '20px',
+              background: 'rgba(254,250,255,0.45)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(47,43,64,0.10)',
+              boxShadow: '0 4px 28px rgba(47,43,64,0.06)',
+            }}
+          >
+            {/* ── Header: count + clear ── */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              paddingBottom: '8px',
+              borderBottom: '1px solid rgba(47,43,64,0.08)',
+            }}>
+              <span style={{
+                fontSize: '0.82rem', color: 'var(--color-accent)', opacity: 0.75,
+                fontFamily: "'ADLaM Display', cursive",
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '22px', height: '22px', borderRadius: '7px',
+                  background: 'rgba(47,43,64,0.10)',
+                  fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-accent)',
+                }}>
+                  {entries.length}
+                </span>
+                file{entries.length !== 1 ? 's' : ''} added
+              </span>
+              <button
+                onClick={clearAll}
+                disabled={isUploading}
+                style={{
+                  background: 'none', border: 'none',
+                  cursor: isUploading ? 'not-allowed' : 'pointer',
+                  fontSize: '0.72rem', color: 'var(--color-accent)',
+                  opacity: isUploading ? 0.3 : 0.5,
+                  fontFamily: "'ADLaM Display', cursive",
+                  padding: '4px 10px', borderRadius: '8px',
+                  transition: 'opacity 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => {
+                  if (!isUploading) {
+                    e.currentTarget.style.opacity = '1'
+                    e.currentTarget.style.background = 'rgba(47,43,64,0.06)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isUploading) {
+                    e.currentTarget.style.opacity = '0.5'
+                    e.currentTarget.style.background = 'none'
+                  }
+                }}
+              >
+                Clear all
+              </button>
+            </div>
+
+            {/* ── Scrollable file list ── */}
+            <div
+              className="fdz-scroll"
+              style={{
+                display: 'flex', flexDirection: 'column', gap: '8px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                paddingRight: '4px',
+                scrollbarWidth: 'thin',
+                scrollbarColor: 'rgba(47,43,64,0.12) transparent',
+              }}
+            >
+              {entries.map((entry, i) => (
+                <div key={entry.id} className="fdz-file-card" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <FileCard entry={entry} onRemove={() => removeEntry(entry.id)} disabled={isUploading} />
+                </div>
+              ))}
+            </div>
+
+            {/* ── Upload progress bar ── */}
+            {isUploading && (
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: '8px',
+                padding: '14px 16px',
+                borderRadius: '12px',
+                background: 'rgba(47,43,64,0.04)',
+                border: '1px solid rgba(47,43,64,0.08)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: '0.78rem', color: 'var(--color-accent)',
+                    fontFamily: "'ADLaM Display', cursive",
+                  }}>
+                    Analyzing {uploadProgress.currentFile}…
+                  </span>
+                  <span style={{
+                    fontSize: '0.7rem', color: 'var(--color-accent)', opacity: 0.6,
+                  }}>
+                    {uploadProgress.completed}/{uploadProgress.total}
+                  </span>
+                </div>
+                <div style={{
+                  height: '5px', borderRadius: '999px',
+                  background: 'rgba(47,43,64,0.08)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: '999px',
+                    width: `${progressPct}%`,
+                    background: 'linear-gradient(90deg, #7c6fa0, #b05a7a)',
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Upload summary (success/error) ── */}
+            {uploadSummary && uploadStatus !== 'uploading' && (
+              <div style={{
+                padding: '14px 16px',
+                borderRadius: '12px',
+                background: uploadStatus === 'error'
+                  ? 'rgba(176,90,122,0.10)'
+                  : 'rgba(90,138,106,0.10)',
+                border: `1px solid ${uploadStatus === 'error' ? 'rgba(176,90,122,0.20)' : 'rgba(90,138,106,0.20)'}`,
+                display: 'flex', flexDirection: 'column', gap: '4px',
+              }}>
+                <span style={{
+                  fontSize: '0.82rem', fontFamily: "'ADLaM Display', cursive",
+                  color: uploadStatus === 'error' ? '#b05a7a' : '#5a8a6a',
+                  fontWeight: 600,
+                }}>
+                  {uploadStatus === 'error'
+                    ? '⚠️ Upload failed'
+                    : `✨ ${uploadSummary.totalShifts} date${uploadSummary.totalShifts !== 1 ? 's' : ''} extracted`
+                  }
+                </span>
+                {uploadSummary.totalDaysOff > 0 && uploadStatus === 'done' && (
+                  <span style={{ fontSize: '0.74rem', color: 'var(--color-accent)', opacity: 0.65 }}>
+                    Including {uploadSummary.totalDaysOff} day{uploadSummary.totalDaysOff !== 1 ? 's' : ''} off 🩷
+                  </span>
+                )}
+                {uploadSummary.failedCount > 0 && (
+                  <span style={{ fontSize: '0.74rem', color: '#b05a7a', opacity: 0.8 }}>
+                    {uploadSummary.failedCount} file{uploadSummary.failedCount !== 1 ? 's' : ''} failed
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* ── Submit / Confirm button ── */}
+            {uploadStatus !== 'done' && (
+              <button
+                id="submit-files-btn"
+                onClick={handleSubmit}
+                disabled={isUploading}
+                style={{
+                  padding: '12px 28px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  cursor: isUploading ? 'not-allowed' : 'pointer',
+                  fontFamily: "'ADLaM Display', cursive",
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  color: '#FEFAFF',
+                  background: isUploading
+                    ? 'rgba(47,43,64,0.35)'
+                    : 'linear-gradient(135deg, #2f2b40 0%, #5a4a6a 50%, #7c6fa0 100%)',
+                  boxShadow: isUploading
+                    ? 'none'
+                    : '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)',
+                  transition: 'all 0.3s ease',
+                  transform: 'translateY(0)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  marginTop: '2px',
+                }}
+                onMouseEnter={e => {
+                  if (!isUploading) {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.boxShadow = '0 8px 30px rgba(47,43,64,0.35), 0 2px 8px rgba(124,111,160,0.3)'
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isUploading) {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(47,43,64,0.25), 0 1px 4px rgba(47,43,64,0.12)'
+                  }
+                }}
+              >
+                {isUploading ? (
+                  <>
+                    <span style={{
+                      display: 'inline-block', width: '16px', height: '16px',
+                      border: '2px solid rgba(254,250,255,0.3)',
+                      borderTopColor: '#FEFAFF',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                    Analyzing…
+                  </>
+                ) : (
+                  <>
+                    ✨ Confirm & Analyze
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+    </>
   )
 }
 
@@ -398,67 +584,69 @@ export default function FileDropZone() {
 
 function FileCard({ entry, onRemove, disabled }: { entry: FileEntry; onRemove: () => void; disabled?: boolean }) {
   const { file, preview, identified } = entry
+  const [imgError, setImgError] = useState(false)
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: '14px',
-      padding: '12px 16px',
-      borderRadius: '14px',
-      background: 'rgba(254,250,255,0.55)',
+      display: 'flex', alignItems: 'center', gap: '12px',
+      padding: '10px 14px',
+      borderRadius: '12px',
+      background: 'rgba(254,250,255,0.6)',
       backdropFilter: 'blur(6px)',
       WebkitBackdropFilter: 'blur(6px)',
-      border: '1px solid rgba(47,43,64,0.10)',
-      boxShadow: '0 1px 6px rgba(47,43,64,0.06)',
+      border: '1px solid rgba(47,43,64,0.08)',
+      boxShadow: '0 1px 4px rgba(47,43,64,0.04)',
       transition: 'box-shadow 0.2s, opacity 0.2s',
       opacity: disabled ? 0.6 : 1,
     }}>
 
       {/* Thumbnail or icon */}
-      {preview ? (
+      {preview && !imgError ? (
         <img
           src={preview}
           alt={file.name}
+          onError={() => setImgError(true)}
           style={{
-            width: '44px', height: '44px', objectFit: 'cover',
+            width: '40px', height: '40px', objectFit: 'cover',
             borderRadius: '8px', flexShrink: 0,
-            border: '1px solid rgba(47,43,64,0.12)',
+            border: '1px solid rgba(47,43,64,0.10)',
           }}
         />
       ) : (
         <div style={{
-          width: '44px', height: '44px', borderRadius: '8px', flexShrink: 0,
+          width: '40px', height: '40px', borderRadius: '8px', flexShrink: 0,
           background: `${identified.color}18`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '22px',
+          fontSize: '20px',
         }}>
           {identified.icon}
         </div>
       )}
 
       {/* File info */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <span style={{
-          fontSize: '0.88rem', fontWeight: 600,
+          fontSize: '0.82rem', fontWeight: 600,
           color: 'var(--color-accent)',
           fontFamily: "'ADLaM Display', cursive",
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           {file.name}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* Type badge */}
           <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: '4px',
-            fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em',
+            display: 'inline-flex', alignItems: 'center', gap: '3px',
+            fontSize: '0.64rem', fontWeight: 600, letterSpacing: '0.04em',
             color: identified.color,
             background: `${identified.color}18`,
             border: `1px solid ${identified.color}30`,
-            padding: '2px 8px', borderRadius: '999px',
+            padding: '1px 7px', borderRadius: '999px',
           }}>
             {identified.icon} {identified.label}
           </span>
           {/* File size */}
-          <span style={{ fontSize: '0.72rem', color: 'var(--color-text)', opacity: 0.5 }}>
+          <span style={{ fontSize: '0.68rem', color: 'var(--color-text)', opacity: 0.5 }}>
             {formatBytes(file.size)}
           </span>
         </div>
@@ -472,7 +660,7 @@ function FileCard({ entry, onRemove, disabled }: { entry: FileEntry; onRemove: (
         style={{
           background: 'none', border: 'none',
           cursor: disabled ? 'not-allowed' : 'pointer',
-          color: 'var(--color-accent)', opacity: disabled ? 0.15 : 0.35, fontSize: '18px',
+          color: 'var(--color-accent)', opacity: disabled ? 0.15 : 0.35, fontSize: '16px',
           lineHeight: 1, padding: '4px', borderRadius: '6px',
           transition: 'opacity 0.15s',
           flexShrink: 0,
