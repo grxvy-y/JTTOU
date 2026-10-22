@@ -291,6 +291,7 @@ function generateClientMockShifts(): Shift[] {
  */
 export async function uploadFiles(
   files: File[],
+  employeeName?: string,
   onProgress?: (completed: number, total: number, filename: string) => void,
 ): Promise<UploadSummary> {
   const summary: UploadSummary = {
@@ -309,6 +310,9 @@ export async function uploadFiles(
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (employeeName && employeeName.trim()) {
+        formData.append('employee_name', employeeName.trim())
+      }
 
       const res = await fetch(`${API_BASE}/shifts/upload`, {
         method: 'POST',

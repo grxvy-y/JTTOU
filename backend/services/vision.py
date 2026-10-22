@@ -40,31 +40,79 @@ class RosterExtractionResult(BaseModel):
     notes: Optional[str] = Field(default=None, description="Any observations or warnings from the AI")
 
 
-ROSTER_VISION_PROMPT = """You are an expert AI vision assistant specialized in reading employee work schedules and restaurant rosters.
-Analyze the provided roster image carefully and extract all scheduled days, shifts, and days off for the relevant person.
+def _build_roster_prompt(employee_name: str | None = None) -> str:
+    """Build a format-aware roster extraction prompt, optionally targeting a specific employee name."""
 
-Rules:
-1. Examine the roster table, grid, or list. Identify each day/date listed (e.g. Monday Aug 24 through Sunday Aug 30).
-2. If only month and day or weekday are visible, infer the year from context or assume the current year (2026). Always format `shift_date` as `YYYY-MM-DD`.
+    name_hint = ""
+    if employee_name and employee_name.strip():
+        name_hint = f"""
+IMPORTANT — EMPLOYEE NAME TO SEARCH FOR: "{employee_name.strip()}"
+You MUST find this exact person (or the closest name match) in the schedule and ONLY extract their shifts.
+Do NOT extract shifts for any other employee. If you cannot find this name, return an empty shifts array and note the issue.
+"""
+
+    return f"""You are a highly accurate AI vision assistant that reads employee work schedules and extracts shift data.
+{name_hint}
+You will encounter one of TWO schedule formats. Identify which format is present first, then extract accordingly.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMAT A — CALENDAR VIEW (month/week calendar grid)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This format shows a standard calendar grid (days of week across the top, dates in cells).
+Working days are indicated by a black underline, bold marker, dot, highlight, or any visible mark UNDER or ON the date number.
+Days without any mark are DAYS OFF.
+
+RULES for Format A:
+1. Scan every date cell in the calendar.
+2. If a date cell has a visible mark (underline, bar, dot, highlight, tick, or any indicator below/on the number) → it is a WORKING day. Set is_day_off=false. If no shift times are visible, set start_time and end_time to null.
+3. If a date cell is completely plain/empty with NO mark → it is a DAY OFF. Set is_day_off=true.
+4. DO NOT assume random days are working days. Only mark a day as a shift if there is a clear visible indicator on that specific date.
+5. If shift times (e.g. "9:00-17:00") are written inside or near the date cell, extract them. Otherwise leave start_time and end_time null.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMAT B — EXCEL/SPREADSHEET VIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This format is a table/grid where:
+- Row 1 (top row): dates (e.g. "Oct 21", "Oct 22", etc.) span across columns
+- Row 2: day of week abbreviations (Mon, Tue, Wed...)
+- Row 3+: "AM" and "PM" sub-columns for each date
+- Left-most column: employee names listed vertically (one employee per row or every 2 rows for AM/PM)
+
+RULES for Format B:
+1. First, locate the employee named "{employee_name or '[THE TARGET EMPLOYEE]'}" in the leftmost column. This may be a partial match (e.g. first name only).
+2. Read ACROSS that employee's row(s) for each date column.
 3. For each date:
-   - If working a shift: extract `start_time` and `end_time` in 24-hour time format (HH:MM:SS). For example: "9:00 AM - 5:30 PM" becomes start "09:00:00", end "17:30:00".
-   - If marked as a day off, "OFF", "RDO", "X", blank day off, "Leave", "Sick", or unavailable:
-     set `is_day_off` to true, `start_time` to null, and `end_time` to null.
-   - Capture the `raw_text` snippet representing what is written in the cell or line for that date.
-4. Return ONLY a valid JSON object strictly matching this schema:
-{
+   - If the AM cell shows a time (e.g. "8:00", "8AM") and is NOT "OFF" or blank → working AM shift
+   - If the PM cell shows a time (e.g. "16:00", "4PM") and is NOT "OFF" or blank → working PM shift
+   - If BOTH AM and PM show times → the person works both; use AM start and PM end as the shift range
+   - If a cell shows "OFF", is blank, or has an X → day off for that shift portion
+   - If BOTH AM and PM are OFF/blank → is_day_off=true for that date
+4. Since spreadsheets may be wide and screenshots may be partial, extract ALL visible dates.
+5. Be careful: each row belongs to ONE specific employee. Do not mix up rows.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GENERAL RULES (apply to both formats)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Always format shift_date as YYYY-MM-DD. Infer year from context or use 2026.
+- Convert all times to 24-hour HH:MM:SS format.
+- For "OFF", "RDO", "X", blank, "Leave", "Sick": set is_day_off=true, start_time=null, end_time=null.
+- raw_text should capture exactly what is written in the cell for that date.
+- In your "notes" field, state which format (A or B) you detected.
+
+Return ONLY a valid JSON object with this schema — no extra text:
+{{
   "shifts": [
-    {
+    {{
       "shift_date": "YYYY-MM-DD",
       "start_time": "HH:MM:SS" or null,
       "end_time": "HH:MM:SS" or null,
       "is_day_off": true or false,
-      "raw_text": "text seen on roster"
-    }
+      "raw_text": "exact text seen for this date"
+    }}
   ],
-  "notes": "optional notes regarding roster name, week dates, or ambiguity"
-}
-"""
+  "notes": "Format detected (A or B), employee found or not found, any ambiguity"
+}}"""
+
 
 
 def _clean_json_string(text: str) -> str:
@@ -76,7 +124,7 @@ def _clean_json_string(text: str) -> str:
     return text
 
 
-def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gemini-3.6-flash") -> RosterExtractionResult:
+def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gemini-3.6-flash", employee_name: str | None = None) -> RosterExtractionResult:
     """Extract roster shifts using Google Gemini Vision API."""
     from google import genai
     from google.genai import types
@@ -98,7 +146,7 @@ def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model
             try:
                 response = client.models.generate_content(
                     model=model,
-                    contents=[image_part, ROSTER_VISION_PROMPT],
+                    contents=[image_part, _build_roster_prompt(employee_name)],
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         temperature=0.1,
@@ -137,7 +185,7 @@ def _extract_with_gemini(image_bytes: bytes, mime_type: str, api_key: str, model
     raise RuntimeError(f"Gemini vision extraction failed with candidate models {candidates}: {last_err}")
 
 
-def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gpt-4o") -> RosterExtractionResult:
+def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model_name: str = "gpt-4o", employee_name: str | None = None) -> RosterExtractionResult:
     """Extract roster shifts using OpenAI GPT-4o Vision API."""
     from openai import OpenAI
 
@@ -151,7 +199,7 @@ def _extract_with_openai(image_bytes: bytes, mime_type: str, api_key: str, model
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": ROSTER_VISION_PROMPT},
+                    {"type": "text", "text": _build_roster_prompt(employee_name)},
                     {
                         "type": "image_url",
                         "image_url": {"url": data_url},
@@ -254,6 +302,7 @@ def extract_shifts_from_image(
     image_path: str,
     mime_type: Optional[str] = None,
     provider: Optional[Literal["gemini", "openai"]] = None,
+    employee_name: Optional[str] = None,
 ) -> RosterExtractionResult:
     """
     Main entry point for extracting shift data from a roster image.
@@ -292,10 +341,10 @@ def extract_shifts_from_image(
     try:
         if (selected_provider == "gemini" and gemini_key) or gemini_key:
             gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-            return _extract_with_gemini(image_bytes, mime_type, gemini_key, gemini_model)
+            return _extract_with_gemini(image_bytes, mime_type, gemini_key, gemini_model, employee_name=employee_name)
         elif openai_key:
             openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
-            return _extract_with_openai(image_bytes, mime_type, openai_key, openai_model)
+            return _extract_with_openai(image_bytes, mime_type, openai_key, openai_model, employee_name=employee_name)
         else:
             return _generate_mock_shifts()
     except Exception as e:

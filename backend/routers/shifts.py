@@ -1,7 +1,8 @@
 import os
 import uuid
 import shutil
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from typing import Optional
 from sqlmodel import Session, select
 from database.db import get_session
 from database.models import Shift
@@ -30,6 +31,7 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".jfif", ".pjpeg", ".gif"}
 @router.post("/upload")
 async def upload_roster(
     file: UploadFile = File(...),
+    employee_name: Optional[str] = Form(default=None),
     session: Session = Depends(get_session)
 ):
     # Validate that the uploaded file is an image by MIME type or extension
@@ -58,7 +60,7 @@ async def upload_roster(
 
     # Run AI Vision extraction
     try:
-        extraction = extract_shifts_from_image(file_path, mime_type=file.content_type)
+        extraction = extract_shifts_from_image(file_path, mime_type=file.content_type, employee_name=employee_name)
     except Exception as e:
         raise HTTPException(
             status_code=500,

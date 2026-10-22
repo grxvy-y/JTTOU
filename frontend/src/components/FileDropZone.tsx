@@ -59,6 +59,17 @@ export default function FileDropZone() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Employee name state — persisted so user doesn't have to re-type every session
+  const [employeeName, setEmployeeName] = useState<string>(() => {
+    return localStorage.getItem('pooks_employee_name') ?? ''
+  })
+
+  // Persist employee name changes to localStorage
+  const handleEmployeeNameChange = (val: string) => {
+    setEmployeeName(val)
+    localStorage.setItem('pooks_employee_name', val)
+  }
+
   // Upload state
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0, currentFile: '' })
@@ -128,7 +139,7 @@ export default function FileDropZone() {
 
     try {
       const files = entries.map(e => e.file)
-      const summary = await uploadFiles(files, (completed, total, currentFile) => {
+      const summary = await uploadFiles(files, employeeName.trim() || undefined, (completed, total, currentFile) => {
         setUploadProgress({ completed, total, currentFile })
       })
 
@@ -510,6 +521,69 @@ export default function FileDropZone() {
                 )}
               </div>
             )}
+
+            {/* ── Employee name input ── */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              marginTop: '4px',
+            }}>
+              <label
+                htmlFor="employee-name-input"
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--color-accent)',
+                  opacity: 0.6,
+                  fontFamily: "'ADLaM Display', cursive",
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Whose schedule is this?
+              </label>
+              <input
+                id="employee-name-input"
+                type="text"
+                value={employeeName}
+                onChange={e => handleEmployeeNameChange(e.target.value)}
+                placeholder="Enter name as shown on the schedule…"
+                disabled={isUploading}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(47,43,64,0.15)',
+                  background: 'rgba(254,250,255,0.55)',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                  fontSize: '0.84rem',
+                  color: 'var(--color-accent)',
+                  fontFamily: "'ADLaM Display', cursive",
+                  outline: 'none',
+                  transition: 'border-color 0.2s, box-shadow 0.2s',
+                  boxSizing: 'border-box',
+                  opacity: isUploading ? 0.5 : 1,
+                  cursor: isUploading ? 'not-allowed' : 'text',
+                }}
+                onFocus={e => {
+                  e.currentTarget.style.borderColor = 'rgba(124,111,160,0.5)'
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(124,111,160,0.12)'
+                }}
+                onBlur={e => {
+                  e.currentTarget.style.borderColor = 'rgba(47,43,64,0.15)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+              />
+              <p style={{
+                fontSize: '0.67rem',
+                color: 'var(--color-text)',
+                opacity: 0.45,
+                margin: 0,
+                lineHeight: 1.5,
+              }}>
+                The AI will search for this name to extract only your shifts
+              </p>
+            </div>
 
             {/* ── Submit / Confirm button ── */}
             {uploadStatus !== 'done' && (
