@@ -30,7 +30,7 @@ def create_robust_engine():
 
 engine = create_robust_engine()
 
-# Automatically create tables
+# Automatically create tables and ensure new columns exist
 def init_db():
     global engine
     from database import models
@@ -40,6 +40,24 @@ def init_db():
         print(f"[WARN] Failed to create tables on primary engine ({e}). Re-initializing on SQLite...")
         engine = create_engine("sqlite:///./shifts.db", echo=False, connect_args={"check_same_thread": False})
         SQLModel.metadata.create_all(engine)
+
+    # Ensure optional columns exist in case table was created with earlier schema
+    new_cols = [
+        ("label", "TEXT"),
+        ("notes", "TEXT"),
+        ("event_type", "TEXT"),
+        ("is_not_work", "BOOLEAN DEFAULT 0"),
+        ("icon", "TEXT"),
+    ]
+    with engine.connect() as conn:
+        for col, typ in new_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE shift ADD COLUMN {col} {typ}"))
+                conn.commit()
+            except Exception:
+                # Column already exists or table not ready
+                pass
+
 
 # Function to safely borrow a database connection for requests
 def get_session():

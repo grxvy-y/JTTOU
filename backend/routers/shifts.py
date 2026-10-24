@@ -151,3 +151,120 @@ def get_shifts(session: Session = Depends(get_session)):
 def get_days_off(session: Session = Depends(get_session)):
     days_off = session.exec(select(Shift).where(Shift.is_day_off == True)).all()
     return days_off
+
+
+from pydantic import BaseModel
+from datetime import date as DateType, time as TimeType
+
+class ShiftSaveRequest(BaseModel):
+    shift_date: DateType
+    start_time: Optional[TimeType] = None
+    end_time: Optional[TimeType] = None
+    is_day_off: bool = False
+    raw_text: Optional[str] = None
+    label: Optional[str] = None
+    notes: Optional[str] = None
+    event_type: Optional[str] = "work"
+    is_not_work: bool = False
+    icon: Optional[str] = None
+
+
+class BatchDeleteRequest(BaseModel):
+    dates: list[str]
+
+
+# Save or update an individual date entry (work shift, day off, or personal activity)
+@router.post("/save", response_model=Shift)
+def save_shift(req: ShiftSaveRequest, session: Session = Depends(get_session)):
+    existing = session.exec(
+        select(Shift).where(Shift.shift_date == req.shift_date)
+    ).first()
+
+    if existing:
+        existing.start_time = req.start_time
+        existing.end_time = req.end_time
+        existing.is_day_off = req.is_day_off
+        existing.raw_text = req.raw_text
+        existing.label = req.label
+        existing.notes = req.notes
+        existing.event_type = req.event_type
+        existing.is_not_work = req.is_not_work
+        existing.icon = req.icon
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+    else:
+        new_shift = Shift(
+            shift_date=req.shift_date,
+            start_time=req.start_time,
+            end_time=req.end_time,
+            is_day_off=req.is_day_off,
+            raw_text=req.raw_text,
+            label=req.label,
+            notes=req.notes,
+            event_type=req.event_type,
+            is_not_work=req.is_not_work,
+            icon=req.icon,
+        )
+        session.add(new_shift)
+        session.commit()
+        session.refresh(new_shift)
+        return new_shift
+
+
+# Delete an individual date entry by date string (YYYY-MM-DD)
+@router.delete("/date/{date_str}")
+def delete_shift_by_date(date_str: str, session: Session = Depends(get_session)):
+    try:
+        parsed_date = DateType.fromisoformat(date_str)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+
+    shift = session.exec(select(Shift).where(Shift.shift_date == parsed_date)).first()
+    if not shift:
+        return {"success": True, "message": "Date was not found or already deleted", "deleted_date": date_str}
+
+    session.delete(shift)
+    session.commit()
+    return {"success": True, "message": f"Successfully deleted entry for {date_str}", "deleted_date": date_str}
+
+
+# Reset / completely delete an individual week or batch of dates
+@router.post("/delete-batch")
+def delete_shifts_batch(req: BatchDeleteRequest, session: Session = Depends(get_session)):
+    if not req.dates:
+        return {"success": True, "deleted_count": 0}
+
+    parsed_dates = []
+    for d in req.dates:
+        try:
+            parsed_dates.append(DateType.fromisoformat(d))
+        except Exception:
+            continue
+
+    if not parsed_dates:
+        return {"success": True, "deleted_count": 0}
+
+    shifts_to_delete = session.exec(
+        select(Shift).where(Shift.shift_date.in_(parsed_dates))
+    ).all()
+
+    count = len(shifts_to_delete)
+    for s in shifts_to_delete:
+        session.delete(s)
+    session.commit()
+
+    return {"success": True, "deleted_count": count, "dates": req.dates}
+
+
+# Clear all shifts
+@router.delete("/all")
+def clear_all_shifts(session: Session = Depends(get_session)):
+    all_shifts = session.exec(select(Shift)).all()
+    count = len(all_shifts)
+    for s in all_shifts:
+        session.delete(s)
+    session.commit()
+    return {"success": True, "deleted_count": count, "message": "All shifts cleared"}
+
