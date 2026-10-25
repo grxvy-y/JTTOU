@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type { UserRole } from '../types/auth'
 import jttouLogo from '../assets/JTTOU.svg'
+import PrivacyPolicyModal from './PrivacyPolicyModal'
 
 type AuthMode = 'login' | 'signup'
 
@@ -21,6 +22,8 @@ export default function AuthPage() {
   const [lastName, setLastName] = useState('')
   const [country, setCountry] = useState('')
   const [province, setProvince] = useState('')
+  const [agreeToPolicy, setAgreeToPolicy] = useState(false)
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false)
 
   // UI state
   const [showPassword, setShowPassword] = useState(false)
@@ -69,6 +72,11 @@ export default function AuthPage() {
       return
     }
 
+    if (!agreeToPolicy) {
+      setError('Please review and agree to the Standard Level Privacy Policy to create your account.')
+      return
+    }
+
     setSubmitting(true)
     try {
       const res = registerUser({
@@ -78,6 +86,7 @@ export default function AuthPage() {
         lastName,
         country,
         province,
+        acceptPrivacyPolicy: true,
       })
       if (!res.success) {
         setError(res.error || 'Registration failed')
@@ -652,13 +661,75 @@ export default function AuthPage() {
               </div>
             </div>
 
+            {/* Standard Level Privacy Policy Agreement Checkbox */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                padding: '10px 12px',
+                borderRadius: '12px',
+                background: 'rgba(47, 43, 64, 0.04)',
+                border: '1px solid rgba(47, 43, 64, 0.08)',
+                marginTop: '2px',
+              }}
+            >
+              <input
+                id="agree-privacy-policy"
+                type="checkbox"
+                checked={agreeToPolicy}
+                onChange={e => setAgreeToPolicy(e.target.checked)}
+                style={{
+                  marginTop: '3px',
+                  cursor: 'pointer',
+                  accentColor: 'var(--color-accent)',
+                  width: '16px',
+                  height: '16px',
+                }}
+              />
+              <label
+                htmlFor="agree-privacy-policy"
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--color-text)',
+                  lineHeight: 1.4,
+                  cursor: 'pointer',
+                  flex: 1,
+                }}
+              >
+                I agree to the{' '}
+                <button
+                  type="button"
+                  id="view-signup-privacy-btn"
+                  onClick={() => setIsPolicyModalOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: 'var(--color-accent)',
+                    fontWeight: 700,
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    fontFamily: "'ADLaM Display', cursive",
+                    fontSize: '0.78rem',
+                  }}
+                >
+                  Standard Level Privacy Policy
+                </button>{' '}
+                <span style={{ color: '#b05a7a' }}>*</span>
+                <span style={{ display: 'block', opacity: 0.65, fontSize: '0.72rem', marginTop: '2px' }}>
+                  Ensures personal shifts & notes stay private and requires mutual consent for calendar sync.
+                </span>
+              </label>
+            </div>
+
             {/* Confirm Registration Button */}
             <button
               id="confirm-signup-btn"
               type="submit"
               disabled={submitting}
               style={{
-                marginTop: '6px',
+                marginTop: '4px',
                 padding: '13px 24px',
                 borderRadius: '12px',
                 border: 'none',
@@ -708,6 +779,17 @@ export default function AuthPage() {
           </form>
         )}
       </div>
+
+      {/* Standard Level Privacy Policy Modal Preview */}
+      <PrivacyPolicyModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => setIsPolicyModalOpen(false)}
+        onAccept={() => {
+          setAgreeToPolicy(true)
+          setIsPolicyModalOpen(false)
+        }}
+        showAcceptButton={true}
+      />
 
       {/* Footer copyright note */}
       <p style={{ marginTop: '24px', fontSize: '0.72rem', color: 'var(--color-accent)', opacity: 0.45 }}>

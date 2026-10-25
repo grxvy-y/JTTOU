@@ -1,11 +1,21 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import type { UserProfile, AuthContextType } from '../types/auth'
+import type { UserProfile, AuthContextType, PrivacyPolicyRecord } from '../types/auth'
 
 const AUTH_STORAGE_KEY = 'jttou_auth_user'
 const REGISTERED_USERS_KEY = 'jttou_registered_users'
 
 const ADMIN_PASSWORD = '2705'
 const POOKIE_PASSWORD = '101005'
+
+const DEFAULT_STANDARD_POLICY: PrivacyPolicyRecord = {
+  tier: 'standard',
+  version: '1.0',
+  title: 'Standard Level Privacy Policy',
+  acceptedAt: new Date().toISOString(),
+  personalShiftsPrivate: true,
+  scheduleSyncConsent: true,
+  locationWeatherConsent: true,
+}
 
 // Seed a default demo registered user if none exists
 const DEFAULT_USERS: UserProfile[] = [
@@ -19,6 +29,7 @@ const DEFAULT_USERS: UserProfile[] = [
     province: 'Ontario',
     createdAt: new Date().toISOString(),
     password: 'password123',
+    privacyPolicy: DEFAULT_STANDARD_POLICY,
   },
 ]
 
@@ -42,12 +53,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Ensure default registered users exist in storage
+  // Ensure default registered users exist in storage and backfill standard privacy policy
   useEffect(() => {
     try {
       const existing = localStorage.getItem(REGISTERED_USERS_KEY)
       if (!existing) {
         localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(DEFAULT_USERS))
+      } else {
+        const parsed: UserProfile[] = JSON.parse(existing)
+        let changed = false
+        const updated = parsed.map(u => {
+          if (!u.privacyPolicy) {
+            changed = true
+            return { ...u, privacyPolicy: { ...DEFAULT_STANDARD_POLICY, acceptedAt: u.createdAt || new Date().toISOString() } }
+          }
+          return u
+        })
+        if (changed) {
+          localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(updated))
+        }
       }
     } catch (e) {
       console.warn('Failed to initialize registered users', e)
@@ -72,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastName: 'Manager',
         role: 'admin',
         createdAt: new Date().toISOString(),
+        privacyPolicy: DEFAULT_STANDARD_POLICY,
       }
       saveSession(adminUser)
       return { success: true }
@@ -88,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastName: '🩷',
         role: 'pookie',
         createdAt: new Date().toISOString(),
+        privacyPolicy: DEFAULT_STANDARD_POLICY,
       }
       saveSession(pookieUser)
       return { success: true }
@@ -125,6 +151,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         province: matched.province,
         role: 'user',
         createdAt: matched.createdAt,
+        privacyPolicy: matched.privacyPolicy || {
+          ...DEFAULT_STANDARD_POLICY,
+          acceptedAt: matched.createdAt || new Date().toISOString(),
+        },
       }
       saveSession(sessionUser)
       return { success: true }
@@ -140,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastName: string
     country?: string
     province?: string
+    acceptPrivacyPolicy?: boolean
   }) => {
     const username = data.username.trim().toLowerCase()
     const password = data.password.trim()
@@ -154,12 +185,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'That username is reserved for system roles.' }
     }
 
+    if (data.acceptPrivacyPolicy === false) {
+      return { success: false, error: 'You must accept the Standard Level Privacy Policy to register.' }
+    }
+
     try {
       const raw = localStorage.getItem(REGISTERED_USERS_KEY)
       const list: UserProfile[] = raw ? JSON.parse(raw) : DEFAULT_USERS
 
       if (list.some(u => u.username.toLowerCase() === username)) {
         return { success: false, error: 'This username is already taken. Please choose another.' }
+      }
+
+      const userPrivacyPolicy: PrivacyPolicyRecord = {
+        tier: 'standard',
+        version: '1.0',
+        title: 'Standard Level Privacy Policy',
+        acceptedAt: new Date().toISOString(),
+        personalShiftsPrivate: true,
+        scheduleSyncConsent: true,
+        locationWeatherConsent: true,
       }
 
       const newUser: UserProfile = {
@@ -172,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         province: data.province?.trim() || undefined,
         role: 'user',
         createdAt: new Date().toISOString(),
+        privacyPolicy: userPrivacyPolicy,
       }
 
       list.push(newUser)
@@ -187,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         province: newUser.province,
         role: 'user',
         createdAt: newUser.createdAt,
+        privacyPolicy: newUser.privacyPolicy,
       }
       saveSession(sessionUser)
       return { success: true }

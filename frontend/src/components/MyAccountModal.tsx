@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import PrivacyPolicyModal from './PrivacyPolicyModal'
 
 interface MyAccountModalProps {
   isOpen: boolean
@@ -7,6 +9,7 @@ interface MyAccountModalProps {
 
 export default function MyAccountModal({ isOpen, onClose }: MyAccountModalProps) {
   const { currentUser } = useAuth()
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false)
 
   if (!isOpen || !currentUser) return null
 
@@ -14,7 +17,8 @@ export default function MyAccountModal({ isOpen, onClose }: MyAccountModalProps)
   const roleTitle = currentUser.role === 'admin' ? 'Administrator' : currentUser.role === 'pookie' ? 'Pookie (Partner)' : 'JTTOU User'
 
   return (
-    <div
+    <>
+      <div
       style={{
         position: 'fixed',
         inset: 0,
@@ -138,6 +142,30 @@ export default function MyAccountModal({ isOpen, onClose }: MyAccountModalProps)
             </div>
           )}
 
+          {/* Privacy Policy Row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+            <span style={{ color: 'var(--color-text)', opacity: 0.6 }}>Privacy Policy</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#5a8a6a', fontWeight: 600 }}>Standard Level 🛡️</span>
+              <button
+                id="view-account-privacy-btn"
+                onClick={() => setIsPolicyOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-accent)',
+                  fontSize: '0.74rem',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontFamily: "'ADLaM Display', cursive",
+                }}
+              >
+                View
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
             <span style={{ color: 'var(--color-text)', opacity: 0.6 }}>Calendar Sync</span>
             <span style={{ color: '#5a8a6a', fontWeight: 600 }}>
@@ -172,5 +200,13 @@ export default function MyAccountModal({ isOpen, onClose }: MyAccountModalProps)
         </button>
       </div>
     </div>
+
+    {/* User's Standard Level Privacy Policy Modal */}
+    <PrivacyPolicyModal
+      isOpen={isPolicyOpen}
+      onClose={() => setIsPolicyOpen(false)}
+      user={currentUser}
+    />
+  </>
   )
 }

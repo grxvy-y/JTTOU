@@ -18,7 +18,7 @@ export default function Navbar() {
   // Profile popup state
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
-  const closeTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 12)

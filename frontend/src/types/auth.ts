@@ -1,5 +1,15 @@
 export type UserRole = 'admin' | 'user' | 'pookie'
 
+export interface PrivacyPolicyRecord {
+  tier: 'standard'
+  version: string
+  title: string
+  acceptedAt: string
+  personalShiftsPrivate: boolean
+  scheduleSyncConsent: boolean
+  locationWeatherConsent: boolean
+}
+
 export interface UserProfile {
   id: string
   username: string
@@ -10,6 +20,7 @@ export interface UserProfile {
   province?: string
   createdAt?: string
   password?: string // only stored locally in demo storage
+  privacyPolicy?: PrivacyPolicyRecord
 }
 
 export interface AuthContextType {
@@ -24,6 +35,7 @@ export interface AuthContextType {
     lastName: string
     country?: string
     province?: string
+    acceptPrivacyPolicy?: boolean
   }) => { success: boolean; error?: string }
   logout: () => void
 }
