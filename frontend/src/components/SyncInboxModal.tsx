@@ -14,6 +14,7 @@ export default function SyncInboxModal({ isOpen, onClose }: SyncInboxModalProps)
     sendSyncInvite,
     acceptSyncInvite,
     declineSyncInvite,
+    disconnectSync,
   } = useAuth()
   const [targetUsername, setTargetUsername] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -158,13 +159,45 @@ export default function SyncInboxModal({ isOpen, onClose }: SyncInboxModalProps)
                 border: '1px solid rgba(122, 154, 90, 0.25)',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '10px',
                 fontSize: '0.85rem',
                 color: '#415e24',
               }}
             >
-              <span>🛡️</span>
-              <span>Currently <strong>Synced with @{currentUser.syncedWith}</strong> (Standard Privacy).</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🛡️</span>
+                <span>Currently <strong>Synced with @{currentUser.syncedWith}</strong> (Standard Privacy).</span>
+              </div>
+              <button
+                id="disconnect-sync-btn"
+                type="button"
+                onClick={() => {
+                  const partner = currentUser.syncedWith
+                  disconnectSync()
+                  setFeedback({ type: 'success', message: `Calendar synchronization with @${partner} has been disconnected.` })
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(176, 90, 122, 0.35)',
+                  background: 'rgba(176, 90, 122, 0.08)',
+                  color: '#b05a7a',
+                  fontFamily: 'inherit',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(176, 90, 122, 0.18)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(176, 90, 122, 0.08)'
+                }}
+              >
+                Disconnect
+              </button>
             </div>
           )}
 

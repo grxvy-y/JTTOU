@@ -168,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...DEFAULT_STANDARD_POLICY,
           acceptedAt: matched.createdAt || new Date().toISOString(),
         },
+        syncedWith: matched.syncedWith,
       }
       saveSession(sessionUser)
       return { success: true }
@@ -299,6 +300,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cleanTarget = targetUsername.trim().toLowerCase()
     if (!cleanTarget) return { success: false, error: 'Please enter a target username.' }
 
+    if (cleanTarget === currentUser.username.toLowerCase()) {
+      return { success: false, error: 'You cannot send a sync invite to yourself.' }
+    }
+
+    if (currentUser.syncedWith?.toLowerCase() === cleanTarget) {
+      return { success: false, error: `You are already synced with @${cleanTarget}.` }
+    }
+
+    // Check if target user exists in registered storage
+    const rawUsers = localStorage.getItem(REGISTERED_USERS_KEY)
+    const registered: UserProfile[] = rawUsers ? JSON.parse(rawUsers) : DEFAULT_USERS
+    const targetUser = registered.find(u => u.username.toLowerCase() === cleanTarget)
+    if (!targetUser) {
+      return { success: false, error: `User @${targetUsername.trim()} does not exist. Please check the spelling.` }
+    }
+
+    // Prevent duplicate pending invites in either direction
+    const existingPending = syncRequests.find(
+      r =>
+        r.status === 'pending' &&
+        ((r.senderUsername.toLowerCase() === currentUser.username.toLowerCase() &&
+          r.recipientUsername.toLowerCase() === cleanTarget) ||
+          (r.senderUsername.toLowerCase() === cleanTarget &&
+            r.recipientUsername.toLowerCase() === currentUser.username.toLowerCase()))
+    )
+    if (existingPending) {
+      return { success: false, error: `A sync invitation with @${cleanTarget} is already pending.` }
+    }
+
     const requestId = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     const newReq: SyncRequest = {
       id: requestId,
@@ -378,6 +408,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true }
   }
 
+  const disconnectSync = () => {
+    if (!currentUser || !currentUser.syncedWith) return { success: false }
+    const partner = currentUser.syncedWith
+
+    const updatedUser: UserProfile = { ...currentUser, syncedWith: undefined }
+    saveSession(updatedUser)
+
+    try {
+      const raw = localStorage.getItem(REGISTERED_USERS_KEY)
+      if (raw) {
+        const list: UserProfile[] = JSON.parse(raw)
+        const updatedList = list.map(u => {
+          if (
+            u.username.toLowerCase() === currentUser.username.toLowerCase() ||
+            u.username.toLowerCase() === partner.toLowerCase()
+          ) {
+            const copy = { ...u }
+            delete copy.syncedWith
+            return copy
+          }
+          return u
+        })
+        localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(updatedList))
+      }
+    } catch (e) {
+      console.warn('Failed to clear sync in registered users', e)
+    }
+
+    window.dispatchEvent(new Event('storage'))
+    return { success: true }
+  }
+
   const logout = () => {
     setCurrentUser(null)
     try {
@@ -397,6 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sendSyncInvite,
         acceptSyncInvite,
         declineSyncInvite,
+        disconnectSync,
         loginAsAdmin,
         loginAsPookie,
         loginAsUser,
