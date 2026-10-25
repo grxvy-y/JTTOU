@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import jttouLogo from '../assets/JTTOU.svg'
 import { useAuth } from '../context/AuthContext'
 import MyAccountModal from './MyAccountModal'
+import SyncInboxModal from './SyncInboxModal'
 
 const navLinks = [
   { label: 'Home',     href: '#home' },
@@ -10,7 +11,7 @@ const navLinks = [
 ]
 
 export default function Navbar() {
-  const { currentUser, logout } = useAuth()
+  const { currentUser, logout, incomingSyncRequests } = useAuth()
   const [active, setActive] = useState('Home')
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -18,7 +19,10 @@ export default function Navbar() {
   // Profile popup state
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const incomingCount = incomingSyncRequests.length
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 12)
@@ -225,6 +229,22 @@ export default function Navbar() {
                       ? 'Pookie'
                       : currentUser.firstName}
                   </span>
+                  {incomingCount > 0 && (
+                    <span
+                      id="navbar-user-badge"
+                      style={{
+                        background: '#b05a7a',
+                        color: '#fff',
+                        fontSize: '0.65rem',
+                        borderRadius: '999px',
+                        padding: '1px 6px',
+                        fontWeight: 'bold',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {incomingCount}
+                    </span>
+                  )}
                   <span style={{ fontSize: '0.65rem', opacity: 0.6, transform: isProfileOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
                     ▼
                   </span>
@@ -320,6 +340,58 @@ export default function Navbar() {
                       <span>My account</span>
                     </button>
 
+                    {/* Sync Inbox text link */}
+                    <button
+                      id="profile-sync-inbox-link"
+                      onClick={() => {
+                        setIsProfileOpen(false)
+                        cancelCloseTimer()
+                        setIsSyncModalOpen(true)
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        padding: '9px 12px',
+                        background: 'none',
+                        border: 'none',
+                        borderRadius: '10px',
+                        textAlign: 'left',
+                        fontSize: '0.84rem',
+                        color: 'var(--color-accent)',
+                        fontFamily: "'ADLaM Display', cursive",
+                        cursor: 'pointer',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      onMouseEnter={e => {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(47, 43, 64, 0.06)'
+                      }}
+                      onMouseLeave={e => {
+                        ;(e.currentTarget as HTMLButtonElement).style.background = 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🔄</span>
+                        <span>Sync Inbox</span>
+                      </div>
+                      {incomingCount > 0 && (
+                        <span
+                          id="sync-inbox-badge"
+                          style={{
+                            background: '#b05a7a',
+                            color: '#fff',
+                            fontSize: '0.68rem',
+                            borderRadius: '999px',
+                            padding: '1px 7px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {incomingCount}
+                        </span>
+                      )}
+                    </button>
+
                     {/* Logout text link */}
                     <button
                       id="profile-logout-link"
@@ -352,7 +424,7 @@ export default function Navbar() {
                       }}
                     >
                       <span>🚪</span>
-                      <span>Logout</span>
+                      <span>Log out</span>
                     </button>
                   </div>
                 </div>
@@ -472,6 +544,12 @@ export default function Navbar() {
       <MyAccountModal
         isOpen={isAccountModalOpen}
         onClose={() => setIsAccountModalOpen(false)}
+      />
+
+      {/* Sync Inbox Modal */}
+      <SyncInboxModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
       />
     </>
   )

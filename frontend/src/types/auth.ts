@@ -10,6 +10,15 @@ export interface PrivacyPolicyRecord {
   locationWeatherConsent: boolean
 }
 
+export interface SyncRequest {
+  id: string
+  senderUsername: string
+  recipientUsername: string
+  status: 'pending' | 'accepted' | 'declined'
+  createdAt: string
+  privacyTier: 'standard'
+}
+
 export interface UserProfile {
   id: string
   username: string
@@ -21,10 +30,15 @@ export interface UserProfile {
   createdAt?: string
   password?: string // only stored locally in demo storage
   privacyPolicy?: PrivacyPolicyRecord
+  syncedWith?: string
 }
 
 export interface AuthContextType {
   currentUser: UserProfile | null
+  syncRequests: SyncRequest[]
+  incomingSyncRequests: SyncRequest[]
+  outgoingSyncRequests: SyncRequest[]
+  sendSyncInvite: (targetUsername: string) => { success: boolean; error?: string; requestId?: string }
   loginAsAdmin: (password: string) => { success: boolean; error?: string }
   loginAsPookie: (password: string) => { success: boolean; error?: string }
   loginAsUser: (username: string, password: string) => { success: boolean; error?: string }

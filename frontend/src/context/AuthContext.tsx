@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import type { UserProfile, AuthContextType, PrivacyPolicyRecord } from '../types/auth'
+import type { UserProfile, AuthContextType, PrivacyPolicyRecord, SyncRequest } from '../types/auth'
 
 const AUTH_STORAGE_KEY = 'jttou_auth_user'
 const REGISTERED_USERS_KEY = 'jttou_registered_users'
+const SYNC_STORAGE_KEY = 'jttou_sync_requests'
 
 const ADMIN_PASSWORD = '2705'
 const POOKIE_PASSWORD = '101005'
@@ -256,6 +257,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const [syncRequests, setSyncRequests] = useState<SyncRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(SYNC_STORAGE_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  // Synchronize sync requests across window storage events
+  const refreshSyncRequests = () => {
+    try {
+      const saved = localStorage.getItem(SYNC_STORAGE_KEY)
+      if (saved) setSyncRequests(JSON.parse(saved))
+    } catch (e) {
+      console.warn('Failed to refresh sync requests', e)
+    }
+  }
+
+  useEffect(() => {
+    const onStorage = () => refreshSyncRequests()
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  const incomingSyncRequests = currentUser
+    ? syncRequests.filter(
+        r => r.recipientUsername.toLowerCase() === currentUser.username.toLowerCase() && r.status === 'pending'
+      )
+    : []
+
+  const outgoingSyncRequests = currentUser
+    ? syncRequests.filter(
+        r => r.senderUsername.toLowerCase() === currentUser.username.toLowerCase()
+      )
+    : []
+
+  const sendSyncInvite = (targetUsername: string) => {
+    if (!currentUser) return { success: false, error: 'Must be signed in to send sync requests.' }
+    const cleanTarget = targetUsername.trim().toLowerCase()
+    if (!cleanTarget) return { success: false, error: 'Please enter a target username.' }
+
+    const requestId = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const newReq: SyncRequest = {
+      id: requestId,
+      senderUsername: currentUser.username,
+      recipientUsername: cleanTarget,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      privacyTier: 'standard',
+    }
+
+    const updated = [...syncRequests, newReq]
+    setSyncRequests(updated)
+    try {
+      localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(updated))
+    } catch (e) {
+      console.warn('Failed to persist sync request', e)
+    }
+
+    return { success: true, requestId }
+  }
+
   const logout = () => {
     setCurrentUser(null)
     try {
@@ -269,6 +333,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         currentUser,
+        syncRequests,
+        incomingSyncRequests,
+        outgoingSyncRequests,
+        sendSyncInvite,
         loginAsAdmin,
         loginAsPookie,
         loginAsUser,

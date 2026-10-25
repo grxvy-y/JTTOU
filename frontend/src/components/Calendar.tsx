@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useAuth } from '../context/AuthContext'
 import type {
   WeatherData,
   Shift,
@@ -485,6 +486,7 @@ function WeekResetBar({ weekLabel, onConfirm, onCancel }: { weekLabel: string; o
 // ─── Main Calendar Component ─────────────────────────────────────────────────
 
 export default function Calendar() {
+  const { currentUser } = useAuth()
   const now = new Date()
   const [viewYear, setViewYear]   = useState(now.getFullYear())
   const [viewMonth, setViewMonth] = useState(now.getMonth())
@@ -643,6 +645,52 @@ export default function Calendar() {
 
   return (
     <section id="calendar" style={{ width: '100%', maxWidth: '680px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+      {/* Calendar Sync Status Header */}
+      {currentUser?.syncedWith && (
+        <div
+          id="calendar-sync-header"
+          style={{
+            borderRadius: '16px',
+            background: 'rgba(122, 154, 90, 0.15)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(122, 154, 90, 0.35)',
+            boxShadow: '0 2px 20px rgba(47, 43, 64, 0.06)',
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            fontFamily: font,
+            color: '#36531d',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+            <div>
+              <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600 }}>
+                {currentUser.firstName} is synced with @{currentUser.syncedWith} under Standard Privacy
+              </p>
+              <p style={{ margin: 0, fontSize: '0.72rem', opacity: 0.75 }}>
+                Mutual schedule visibility active • Protected by Standard Privacy Policy
+              </p>
+            </div>
+          </div>
+          <span
+            style={{
+              fontSize: '0.74rem',
+              padding: '4px 10px',
+              borderRadius: '999px',
+              background: 'rgba(122, 154, 90, 0.22)',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+            }}
+          >
+            SYNCED
+          </span>
+        </div>
+      )}
 
       {/* Weather Ribbon */}
       <div style={{ borderRadius: '16px', background: 'rgba(254,250,255,0.55)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(47,43,64,0.10)', boxShadow: '0 2px 20px rgba(47,43,64,0.06)', padding: '14px 20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
