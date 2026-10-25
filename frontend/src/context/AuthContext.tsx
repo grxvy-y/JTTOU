@@ -17,13 +17,25 @@ const DEFAULT_STANDARD_POLICY: PrivacyPolicyRecord = {
   locationWeatherConsent: true,
 }
 
-// Seed a default demo registered user if none exists
+// Seed default registered users if none exists
 const DEFAULT_USERS: UserProfile[] = [
   {
     id: 'user-demo-1',
     username: 'demo',
     firstName: 'Demo',
     lastName: 'User',
+    role: 'user',
+    country: 'Canada',
+    province: 'Ontario',
+    createdAt: new Date().toISOString(),
+    password: 'password123',
+    privacyPolicy: DEFAULT_STANDARD_POLICY,
+  },
+  {
+    id: 'user-bob-1',
+    username: 'bob',
+    firstName: 'Bob',
+    lastName: 'Builder',
     role: 'user',
     country: 'Canada',
     province: 'Ontario',
@@ -193,8 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(REGISTERED_USERS_KEY)
       const list: UserProfile[] = raw ? JSON.parse(raw) : DEFAULT_USERS
 
-      if (list.some(u => u.username.toLowerCase() === username)) {
-        return { success: false, error: 'This username is already taken. Please choose another.' }
+      // Strict duplicate username prevention (case-insensitive check against all registered users)
+      const duplicate = list.find(u => u.username.toLowerCase() === username)
+      if (duplicate) {
+        return { success: false, error: `The username "${username}" is already taken. Please choose another username.` }
       }
 
       const userPrivacyPolicy: PrivacyPolicyRecord = {
@@ -208,7 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const newUser: UserProfile = {
-        id: `user-${Date.now()}`,
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         username,
         password,
         firstName,
