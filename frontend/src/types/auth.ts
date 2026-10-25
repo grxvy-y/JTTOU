@@ -39,6 +39,8 @@ export interface AuthContextType {
   incomingSyncRequests: SyncRequest[]
   outgoingSyncRequests: SyncRequest[]
   sendSyncInvite: (targetUsername: string) => { success: boolean; error?: string; requestId?: string }
+  acceptSyncInvite: (requestId: string) => { success: boolean; error?: string; partnerUsername?: string }
+  declineSyncInvite: (requestId: string) => { success: boolean; error?: string }
   loginAsAdmin: (password: string) => { success: boolean; error?: string }
   loginAsPookie: (password: string) => { success: boolean; error?: string }
   loginAsUser: (username: string, password: string) => { success: boolean; error?: string }

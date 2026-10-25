@@ -320,6 +320,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true, requestId }
   }
 
+  const acceptSyncInvite = (requestId: string) => {
+    if (!currentUser) return { success: false, error: 'Must be logged in to accept invites.' }
+    const req = syncRequests.find(r => r.id === requestId)
+    if (!req) return { success: false, error: 'Invite not found.' }
+
+    const sender = req.senderUsername
+    const recipient = req.recipientUsername
+
+    const updatedRequests: SyncRequest[] = syncRequests.map(r =>
+      r.id === requestId ? { ...r, status: 'accepted' as const } : r
+    )
+    setSyncRequests(updatedRequests)
+    try {
+      localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(updatedRequests))
+    } catch (e) {
+      console.warn('Failed to update sync requests', e)
+    }
+
+    const updatedUser: UserProfile = { ...currentUser, syncedWith: sender }
+    saveSession(updatedUser)
+
+    try {
+      const raw = localStorage.getItem(REGISTERED_USERS_KEY)
+      if (raw) {
+        const list: UserProfile[] = JSON.parse(raw)
+        const updatedList = list.map(u => {
+          if (u.username.toLowerCase() === recipient.toLowerCase()) {
+            return { ...u, syncedWith: sender }
+          }
+          if (u.username.toLowerCase() === sender.toLowerCase()) {
+            return { ...u, syncedWith: recipient }
+          }
+          return u
+        })
+        localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(updatedList))
+      }
+    } catch (e) {
+      console.warn('Failed to update registered users sync status', e)
+    }
+
+    window.dispatchEvent(new Event('storage'))
+    return { success: true, partnerUsername: sender }
+  }
+
+  const declineSyncInvite = (requestId: string) => {
+    if (!currentUser) return { success: false, error: 'Must be logged in to decline invites.' }
+    const updatedRequests: SyncRequest[] = syncRequests.map(r =>
+      r.id === requestId ? { ...r, status: 'declined' as const } : r
+    )
+    setSyncRequests(updatedRequests)
+    try {
+      localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(updatedRequests))
+    } catch (e) {
+      console.warn('Failed to update sync requests', e)
+    }
+    return { success: true }
+  }
+
   const logout = () => {
     setCurrentUser(null)
     try {
@@ -337,6 +395,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         incomingSyncRequests,
         outgoingSyncRequests,
         sendSyncInvite,
+        acceptSyncInvite,
+        declineSyncInvite,
         loginAsAdmin,
         loginAsPookie,
         loginAsUser,

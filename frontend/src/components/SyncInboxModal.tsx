@@ -7,7 +7,14 @@ interface SyncInboxModalProps {
 }
 
 export default function SyncInboxModal({ isOpen, onClose }: SyncInboxModalProps) {
-  const { currentUser, outgoingSyncRequests, incomingSyncRequests, sendSyncInvite } = useAuth()
+  const {
+    currentUser,
+    outgoingSyncRequests,
+    incomingSyncRequests,
+    sendSyncInvite,
+    acceptSyncInvite,
+    declineSyncInvite,
+  } = useAuth()
   const [targetUsername, setTargetUsername] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -34,6 +41,32 @@ export default function SyncInboxModal({ isOpen, onClose }: SyncInboxModalProps)
       setTargetUsername('')
     } else {
       setFeedback({ type: 'error', message: res.error || 'Failed to dispatch sync invite.' })
+    }
+  }
+
+  const handleAcceptInvite = (reqId: string, senderName: string) => {
+    setFeedback(null)
+    const res = acceptSyncInvite(reqId)
+    if (res.success) {
+      setFeedback({
+        type: 'success',
+        message: `Successfully accepted sync invite! You are now Synced with @${senderName}.`,
+      })
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Failed to accept invitation.' })
+    }
+  }
+
+  const handleDeclineInvite = (reqId: string, senderName: string) => {
+    setFeedback(null)
+    const res = declineSyncInvite(reqId)
+    if (res.success) {
+      setFeedback({
+        type: 'success',
+        message: `Declined sync invitation from @${senderName}.`,
+      })
+    } else {
+      setFeedback({ type: 'error', message: res.error || 'Failed to decline invitation.' })
     }
   }
 
@@ -240,9 +273,69 @@ export default function SyncInboxModal({ isOpen, onClose }: SyncInboxModalProps)
                         ID: {req.id} • Standard Privacy
                       </p>
                     </div>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text)', opacity: 0.7 }}>
-                      Pending review
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        id={`accept-invite-${req.id}`}
+                        onClick={() => handleAcceptInvite(req.id, req.senderUsername)}
+                        title="Accept sync invite"
+                        aria-label="Accept sync invite"
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: '#7a9a5a',
+                          color: '#ffffff',
+                          fontSize: '1.1rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 6px rgba(122, 154, 90, 0.3)',
+                          transition: 'transform 0.15s, background 0.15s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'scale(1.08)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'scale(1)'
+                        }}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        id={`decline-invite-${req.id}`}
+                        onClick={() => handleDeclineInvite(req.id, req.senderUsername)}
+                        title="Decline sync invite"
+                        aria-label="Decline sync invite"
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(176, 90, 122, 0.35)',
+                          background: 'rgba(176, 90, 122, 0.08)',
+                          color: '#b05a7a',
+                          fontSize: '1rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'transform 0.15s, background 0.15s',
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.transform = 'scale(1.08)'
+                          e.currentTarget.style.background = 'rgba(176, 90, 122, 0.15)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.transform = 'scale(1)'
+                          e.currentTarget.style.background = 'rgba(176, 90, 122, 0.08)'
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
