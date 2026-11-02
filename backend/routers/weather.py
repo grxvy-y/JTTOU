@@ -1,7 +1,11 @@
+import os
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from sqlmodel import Session, select
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from database.db import get_session
 from database.models import Shift
@@ -18,6 +22,15 @@ from services.weather import (
 router = APIRouter(prefix="/weather", tags=["weather"])
 
 
+def _require_api_key() -> None:
+    """Raise 503 if OPENWEATHER_API_KEY is not configured."""
+    if not os.getenv("OPENWEATHER_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="WEATHER_NOT_CONFIGURED",
+        )
+
+
 @router.get("/current", response_model=WeatherData, summary="Get current weather")
 def current_weather(
     city: Optional[str] = Query(
@@ -30,6 +43,7 @@ def current_weather(
     Fetch real-time current weather conditions for the specified or default city.
     Includes temperature, feels-like, min/max, condition, emoji, humidity, and wind speed.
     """
+    _require_api_key()
     try:
         return get_current_weather(city=city)
     except ValueError as e:
@@ -53,6 +67,7 @@ def forecast_weather(
     Fetch 5-day daily aggregated weather forecast for the specified or default city.
     Aggregates high/low temperatures, dominant conditions, and daily averages.
     """
+    _require_api_key()
     try:
         return get_forecast(city=city)
     except ValueError as e:
@@ -80,6 +95,7 @@ def weather_for_date(
     Fetch weather forecast for a single specific date.
     Returns 404 if the date is in the past or beyond the 5-day forecast horizon.
     """
+    _require_api_key()
     try:
         weather = get_weather_for_date(target_date=target_date, city=city)
         if weather is None:
@@ -115,6 +131,7 @@ def days_off_weather(
     Query saved days off from the database and automatically pair each one with its
     corresponding weather forecast. Makes a single batch forecast call for efficiency.
     """
+    _require_api_key()
     try:
         query = select(Shift).where(Shift.is_day_off == True)
         if not include_past:

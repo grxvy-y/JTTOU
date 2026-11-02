@@ -137,13 +137,14 @@ export async function fetchCurrentWeather(city?: string): Promise<WeatherApiResp
     const data = await safeFetch<WeatherData>(`${API_BASE}/weather/current${query}`)
     return { data, error: null, isMock: false }
   } catch (err: any) {
-    // Check if error is due to missing API key or offline backend
-    const isApiKeyError = err?.message?.includes('OPENWEATHER_API_KEY')
+    // 503 WEATHER_NOT_CONFIGURED → key is simply not set; hide weather silently
+    if (err?.message?.includes('WEATHER_NOT_CONFIGURED')) {
+      return { data: null, error: null, isMock: false }
+    }
+    // Any other error (offline, etc.) → show demo weather as fallback
     return {
       data: getMockCurrentWeather(city || 'Toronto'),
-      error: isApiKeyError
-        ? 'OpenWeatherMap API key not configured in backend/.env — showing demo weather.'
-        : `Could not reach backend (${err?.message || 'Offline'}) — showing demo weather.`,
+      error: `Could not reach backend (${err?.message || 'Offline'}) — showing demo weather.`,
       isMock: true,
     }
   }
@@ -158,12 +159,13 @@ export async function fetchWeatherForecast(city?: string): Promise<WeatherApiRes
     const data = await safeFetch<WeatherData[]>(`${API_BASE}/weather/forecast${query}`)
     return { data, error: null, isMock: false }
   } catch (err: any) {
-    const isApiKeyError = err?.message?.includes('OPENWEATHER_API_KEY')
+    // 503 WEATHER_NOT_CONFIGURED → key is simply not set; hide weather silently
+    if (err?.message?.includes('WEATHER_NOT_CONFIGURED')) {
+      return { data: null, error: null, isMock: false }
+    }
     return {
       data: getMockForecast(city || 'Toronto'),
-      error: isApiKeyError
-        ? 'OpenWeatherMap API key not configured — showing demo forecast.'
-        : `Backend offline — showing demo forecast.`,
+      error: `Backend offline — showing demo forecast.`,
       isMock: true,
     }
   }
